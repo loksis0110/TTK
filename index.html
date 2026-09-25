@@ -355,7 +355,7 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
       <div class="hero"><span class="eyebrow">ЗАКУПКА</span><h1>Заявки</h1><p>Список закупки на завтра.</p></div>
       <div class="info" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <span>Заявка автоматически отправляется закупщику в Telegram каждый день в 07:00 (МСК). Если список пуст — ничего не отправляется.</span>
-        <span class="admin-only"><button class="btn primary sm" style="white-space:nowrap" onclick="sendOrderNow()">📤 Отправить сейчас</button></span>
+        <span class="not-waiter-only"><button class="btn primary sm" style="white-space:nowrap" onclick="sendOrderNow()">📤 Отправить сейчас</button></span>
       </div>
       <div class="panel">
         <h3>Добавить позицию</h3>
@@ -445,6 +445,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isAdmin=()=>me&&['master','bar_manager'].includes(me.role);
 const canEdit=()=>me&&['master','bar_manager','senior_bartender'].includes(me.role);
+const notWaiter=()=>me&&me.role!=='waiter';
 const pad=n=>String(n).padStart(2,'0');
 const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
@@ -564,6 +565,7 @@ async function enter(){
   $('tab-team').classList.toggle('hidden',!isAdmin());
   document.querySelectorAll('.edit-only').forEach(e=>e.classList.toggle('hidden',!canEdit()));
   document.querySelectorAll('.admin-only').forEach(e=>e.classList.toggle('hidden',!isAdmin()));
+  document.querySelectorAll('.not-waiter-only').forEach(e=>e.classList.toggle('hidden',!notWaiter()));
   await run(async()=>{menu=await api('/api/menu')});
   if(isAdmin())refreshPending();
   go('drinks');
@@ -922,13 +924,25 @@ function renderPhotos(){
               <div class="t">${cp.uploaded?'✅':(cp.overdue?'❗':'⏳')} Фото к ${esc(cp.due_at)}</div>
               <div class="s">${cp.uploaded?'Загружено':(cp.overdue?'Просрочено':'Ожидается')}</div>
             </div>
-            ${cp.uploaded
-              ?`<img src="/api/shifts/photos/${cp.photo_id}/file?token=${encodeURIComponent(token||'')}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;cursor:pointer" onclick="window.open('/api/shifts/photos/${cp.photo_id}/file?token=${encodeURIComponent(token||'')}','_blank')">`
-              :(mine?`<label class="btn sm primary" style="cursor:pointer">Загрузить<input type="file" accept="image/*" capture="environment" class="hidden" onchange="uploadPhoto(${s.shift_id},'${cp.slot}',this)"></label>`:'')}
+            <div style="display:flex;gap:8px;align-items:center">
+              ${(!cp.uploaded&&isAdmin())?`<button class="btn sm" onclick="remindPhotoNow(${s.shift_id},'${cp.slot}')">📤 Напомнить сейчас</button>`:''}
+              ${cp.uploaded
+                ?`<img src="/api/shifts/photos/${cp.photo_id}/file?token=${encodeURIComponent(token||'')}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;cursor:pointer" onclick="window.open('/api/shifts/photos/${cp.photo_id}/file?token=${encodeURIComponent(token||'')}','_blank')">`
+                :(mine?`<label class="btn sm primary" style="cursor:pointer">Загрузить<input type="file" accept="image/*" capture="environment" class="hidden" onchange="uploadPhoto(${s.shift_id},'${cp.slot}',this)"></label>`:'')}
+            </div>
           </div>`).join('')}
       </div>
     </div>`;
   }).join(''):'<div class="row muted">На сегодня фото не требуются</div>';
+}
+async function remindPhotoNow(shiftId,slot){
+  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot',slot);
+  try{
+    const r=await fetch('/api/shifts/photos/remind_now',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
+    let data=null;try{data=await r.json()}catch(e){}
+    if(!r.ok)throw new Error(data?.detail||'Ошибка отправки');
+    toast('Напоминание отправлено 📤');
+  }catch(e){toast(e.message||'Ошибка отправки')}
 }
 async function uploadPhoto(shiftId,slot,input){
   const file=input.files[0];if(!file)return;

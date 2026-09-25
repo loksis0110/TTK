@@ -472,6 +472,13 @@ def require_schedule_editor(user: dict = Depends(current_user)) -> dict:
     return user
 
 
+def require_not_waiter(user: dict = Depends(current_user)) -> dict:
+    """Для действий, доступных всем ролям, кроме официанта (например, принудительная отправка заявки)."""
+    if user["role"] == "waiter":
+        raise HTTPException(403, "Недостаточно прав")
+    return user
+
+
 def public_user(u) -> dict:
     return {"id": u["id"], "username": u["username"], "name": u["name"], "role": u["role"]}
 
@@ -812,14 +819,14 @@ async def delete_order(order_id: int, user: dict = Depends(current_user)):
 
 
 @app.post("/api/orders/send_now")
-async def send_order_now(admin: dict = Depends(require_admin)):
+async def send_order_now(actor: dict = Depends(require_not_waiter)):
     """Принудительная отправка текущей заявки в Telegram-группу, не дожидаясь 07:00."""
     if not bot:
         raise HTTPException(400, "BOT_TOKEN не настроен на сервере — отправка недоступна")
     ok = await send_order_to_tg()
     if not ok:
         raise HTTPException(400, "Список закупки пуст — отправлять нечего")
-    logger.info(f"Заявка отправлена вручную пользователем {admin['name']}")
+    logger.info(f"Заявка отправлена вручную пользователем {actor['name']}")
     return {"status": "success"}
 
 
@@ -1194,6 +1201,20 @@ async def get_shift_photo_file(photo_id: int, user: dict = Depends(current_user_
     if not r or not os.path.exists(r["file_path"]):
         raise HTTPException(404, "Фото не найдено")
     return FileResponse(r["file_path"])
+
+
+@app.post("/api/shifts/photos/remind_now")
+async def remind_photo_now(shift_id: int = Form(...), slot: str = Form(...), actor: dict = Depends(require_admin)):
+    """Принудительно отправляет пуш-напоминание о фото прямо сейчас, минуя расписание."""
+    with db() as c:
+        s = get_shift(c, shift_id)
+    valid_slots = {cp["slot"] for cp in photo_checkpoints_for_shift(s)}
+    if slot not in valid_slots:
+        raise HTTPException(400, "Для этой смены не требуется фото в это время")
+    if not s["user_id"]:
+        raise HTTPException(400, "У смены нет сотрудника")
+    send_push([s["user_id"]], "Фото бара", f"Напоминание: нужно сфотографировать бар (к {slot})", "/#photos")
+    return {"status": "success"}
 
 
 @app.delete("/api/shifts/photos/{photo_id}")
