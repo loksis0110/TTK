@@ -286,6 +286,7 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
       <button class="tab" data-t="orders">Заявки</button>
       <button class="tab" data-t="checklist">Чек-лист</button>
       <button class="tab" data-t="photos">Фото</button>
+      <button class="tab" data-t="shame">Стена позора</button>
       <button class="tab" data-t="notes">Заметки</button>
       <button class="tab hidden" data-t="team" id="tab-team">Команда<span class="badge hidden" id="pending-badge"></span></button>
     </nav>
@@ -385,7 +386,27 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
     <!-- ФОТО СМЕНЫ -->
     <section class="view" id="view-photos">
       <div class="hero"><span class="eyebrow">СМЕНА</span><h1>Фото бара</h1><p>Дневная смена — фото в 12:00 и в 20:00. Ночная — фото в 8:00. Напомним за 5 минут.</p></div>
+      <div class="bar">
+        <span class="muted" style="font-size:13px">Забыли отчёт? Загрузите фото за свою смену за последние 14 дней.</span>
+        <span class="sp"></span>
+        <button class="btn sm" onclick="openMyShifts()">🕓 Мои смены</button>
+      </div>
       <div class="group" id="photo-list"></div>
+    </section>
+
+    <!-- СТЕНА ПОЗОРА -->
+    <section class="view" id="view-shame">
+      <div class="hero"><span class="eyebrow">СМЕНА</span><h1>Стена позора</h1><p>Фото и подпись — что именно было сделано не так. Можно отметить виновного — ему придёт уведомление.</p></div>
+      <div class="panel">
+        <h3>Новая запись</h3>
+        <label class="btn block" style="cursor:pointer;text-align:center;margin-top:12px" id="sh-file-label">📷 Выбрать фото
+          <input type="file" accept="image/*" capture="environment" class="hidden" id="sh-file" onchange="$('sh-file-label').textContent=this.files[0]?('✅ '+this.files[0].name):'📷 Выбрать фото'">
+        </label>
+        <textarea class="field" id="sh-caption" rows="2" placeholder="Что было сделано не так?" style="margin-top:12px"></textarea>
+        <select class="field" id="sh-tag" style="margin-top:12px"><option value="">Не отмечать никого</option></select>
+        <button class="btn primary block" style="margin-top:14px" onclick="submitShame()">Опубликовать</button>
+      </div>
+      <div id="shame-list"></div>
     </section>
 
     <!-- ЗАМЕТКИ -->
@@ -401,27 +422,35 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
 
     <!-- КОМАНДА -->
     <section class="view" id="view-team">
-      <div class="hero"><span class="eyebrow">УПРАВЛЕНИЕ</span><h1>Команда</h1><p>Подтверждение аккаунтов, роли и меню.</p></div>
-      <h2 class="h2">Ожидают подтверждения</h2>
-      <div class="group" id="pending"></div>
-      <h2 class="h2">Сотрудники</h2>
-      <div class="group" id="staff"></div>
-      <h2 class="h2">Меню</h2>
-      <div class="panel">
-        <h3>Добавить напиток / ПФ</h3>
-        <input class="field" id="m-title" placeholder="Название" style="margin-top:12px">
-        <select class="field" id="m-cat" style="margin-top:12px">
-          <option value="cocktail">Коктейль</option><option value="lemonade">Лимонад</option><option value="smoothie">Смузи</option>
-          <option value="tea_coffee">Чай / Кофе</option><option value="nonalk">Б/А</option><option value="pf">Заготовка (ПФ)</option>
-        </select>
-        <textarea class="field" id="m-method" rows="2" placeholder="Метод приготовления" style="margin-top:12px"></textarea>
-        <input class="field" id="m-glass" placeholder="Бокал (Рокс, Хайбол…)" style="margin-top:12px">
-        <textarea class="field" id="m-ing" rows="4" placeholder="Ингредиенты, каждый с новой строки&#10;Апероль - 40 мл" style="margin-top:12px"></textarea>
-        <button class="btn primary block" style="margin-top:14px" onclick="addMenuItem()">Сохранить</button>
-        <p class="muted" style="font-size:13px;margin:12px 0 0;text-align:center">ПФ с калькулятором добавляются только через код.</p>
+      <div class="hero"><span class="eyebrow">УПРАВЛЕНИЕ</span><h1>Команда</h1><p>Архивы отчётов и стены позора, подтверждение аккаунтов, роли и меню.</p></div>
+
+      <h2 class="h2">Архивы</h2>
+      <p class="muted" style="font-size:13px;margin:-8px 0 0">Каждые 3 дня фото отчётов смены и фото со стены позора упаковываются в отдельные подписанные ZIP-архивы и удаляются из общего доступа. Архив хранится до следующей архивации, затем удаляется автоматически.</p>
+      <div class="bar"><span class="sp"></span><button class="btn sm primary" onclick="forceArchive()">📦 Архивировать сейчас</button></div>
+      <div class="group" id="archives-list"></div>
+
+      <div class="admin-only hidden">
+        <h2 class="h2">Ожидают подтверждения</h2>
+        <div class="group" id="pending"></div>
+        <h2 class="h2">Сотрудники</h2>
+        <div class="group" id="staff"></div>
+        <h2 class="h2">Меню</h2>
+        <div class="panel">
+          <h3>Добавить напиток / ПФ</h3>
+          <input class="field" id="m-title" placeholder="Название" style="margin-top:12px">
+          <select class="field" id="m-cat" style="margin-top:12px">
+            <option value="cocktail">Коктейль</option><option value="lemonade">Лимонад</option><option value="smoothie">Смузи</option>
+            <option value="tea_coffee">Чай / Кофе</option><option value="nonalk">Б/А</option><option value="pf">Заготовка (ПФ)</option>
+          </select>
+          <textarea class="field" id="m-method" rows="2" placeholder="Метод приготовления" style="margin-top:12px"></textarea>
+          <input class="field" id="m-glass" placeholder="Бокал (Рокс, Хайбол…)" style="margin-top:12px">
+          <textarea class="field" id="m-ing" rows="4" placeholder="Ингредиенты, каждый с новой строки&#10;Апероль - 40 мл" style="margin-top:12px"></textarea>
+          <button class="btn primary block" style="margin-top:14px" onclick="addMenuItem()">Сохранить</button>
+          <p class="muted" style="font-size:13px;margin:12px 0 0;text-align:center">ПФ с калькулятором добавляются только через код.</p>
+        </div>
+        <div class="group" id="menu-list"></div>
+        <button class="btn danger" onclick="resetMenu()">Сбросить меню к стартовому</button>
       </div>
-      <div class="group" id="menu-list"></div>
-      <button class="btn danger" onclick="resetMenu()">Сбросить меню к стартовому</button>
     </section>
   </main>
 </div>
@@ -497,6 +526,7 @@ function reloadTab(){
   if(tab==='orders')fetchOrders();
   else if(tab==='checklist')loadChecklist();
   else if(tab==='photos')loadPhotos();
+  else if(tab==='shame')loadShame();
   else if(tab==='notes')loadNotes();
   else if(tab==='schedule')({month:loadMonth,week:loadWeek,history:loadHistory})[schView]();
   else if(tab==='team')loadTeam();
@@ -562,7 +592,7 @@ async function boot(){
 async function enter(){
   $('auth').classList.add('hidden');$('app').classList.remove('hidden');
   $('user-chip').textContent=`${me.name} · ${ROLES[me.role]||''}`;
-  $('tab-team').classList.toggle('hidden',!isAdmin());
+  $('tab-team').classList.toggle('hidden',!canEdit());
   document.querySelectorAll('.edit-only').forEach(e=>e.classList.toggle('hidden',!canEdit()));
   document.querySelectorAll('.admin-only').forEach(e=>e.classList.toggle('hidden',!isAdmin()));
   document.querySelectorAll('.not-waiter-only').forEach(e=>e.classList.toggle('hidden',!notWaiter()));
@@ -654,6 +684,7 @@ function go(t){
   if(t==='orders')fetchOrders();
   if(t==='checklist')loadChecklist();
   if(t==='photos')loadPhotos();
+  if(t==='shame')loadShame();
   if(t==='notes')loadNotes();
   if(t==='team')loadTeam();
   window.scrollTo({top:0});
@@ -922,7 +953,7 @@ function renderPhotos(){
           <div class="row">
             <div>
               <div class="t">${cp.uploaded?'✅':(cp.overdue?'❗':'⏳')} Фото к ${esc(cp.due_at)}</div>
-              <div class="s">${cp.uploaded?'Загружено':(cp.overdue?'Просрочено':'Ожидается')}</div>
+              <div class="s">${cp.uploaded?(cp.caption?esc(cp.caption):'Загружено'):(cp.overdue?'Просрочено':'Ожидается')}</div>
             </div>
             <div style="display:flex;gap:8px;align-items:center">
               ${(!cp.uploaded&&isAdmin())?`<button class="btn sm" onclick="remindPhotoNow(${s.shift_id},'${cp.slot}')">📤 Напомнить сейчас</button>`:''}
@@ -931,6 +962,16 @@ function renderPhotos(){
                 :(mine?`<label class="btn sm primary" style="cursor:pointer">Загрузить<input type="file" accept="image/*" capture="environment" class="hidden" onchange="uploadPhoto(${s.shift_id},'${cp.slot}',this)"></label>`:'')}
             </div>
           </div>`).join('')}
+        ${(s.extra_photos||[]).map(ep=>`
+          <div class="row">
+            <div><div class="t">📎 Доп. фото отчёта</div><div class="s">${ep.caption?esc(ep.caption):'Без подписи'}</div></div>
+            <img src="/api/shifts/photos/${ep.id}/file?token=${encodeURIComponent(token||'')}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;cursor:pointer" onclick="window.open('/api/shifts/photos/${ep.id}/file?token=${encodeURIComponent(token||'')}','_blank')">
+          </div>`).join('')}
+        ${mine?`
+          <div class="row" style="flex-direction:column;align-items:stretch;gap:8px">
+            <textarea class="field" id="extra-cap-${s.shift_id}" rows="1" placeholder="Подпись: что было сделано за смену (необязательно)"></textarea>
+            <label class="btn sm" style="cursor:pointer;text-align:center">+ Доп. фото отчёта<input type="file" accept="image/*" capture="environment" class="hidden" onchange="uploadExtraPhoto(${s.shift_id},this)"></label>
+          </div>`:''}
       </div>
     </div>`;
   }).join(''):'<div class="row muted">На сегодня фото не требуются</div>';
@@ -954,6 +995,109 @@ async function uploadPhoto(shiftId,slot,input){
     toast('Фото загружено ✅');loadPhotos();
   }catch(e){toast(e.message||'Ошибка загрузки')}
   input.value='';
+}
+async function uploadExtraPhoto(shiftId,input){
+  const file=input.files[0];if(!file)return;
+  const capEl=$('extra-cap-'+shiftId),caption=capEl?capEl.value.trim():'';
+  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot','extra');fd.append('caption',caption);fd.append('file',file);
+  try{
+    const r=await fetch('/api/shifts/photos',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
+    let data=null;try{data=await r.json()}catch(e){}
+    if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
+    toast('Фото добавлено ✅');if(capEl)capEl.value='';loadPhotos();
+  }catch(e){toast(e.message||'Ошибка загрузки')}
+  input.value='';
+}
+function ddmmJS(d){const[,m,dd]=d.split('-');return `${dd}.${m}`}
+async function openMyShifts(){
+  const r=await run(()=>api('/api/shifts/photos/mine?days=14'));if(!r)return;
+  if(!r.length){
+    $('sheet').innerHTML='<h2>Мои смены</h2><p class="muted">За последние 14 дней смен не найдено.</p><div class="actions"><button class="btn" onclick="closeSheet()">Закрыть</button></div>';
+    $('ov').classList.add('on');return;
+  }
+  $('sheet').innerHTML=`<h2>Мои смены за 14 дней</h2>
+    <p class="muted" style="font-size:13px;margin:6px 0 0">Выберите смену и добавьте фото с подписью, если забыли отчитаться вовремя.</p>
+    <div class="group" style="margin-top:12px">
+    ${r.map(s=>`<div class="row" style="flex-direction:column;align-items:stretch;gap:8px">
+      <div class="t">${esc(ddmmJS(s.date))} · ${esc(s.start)}–${esc(s.end)}</div>
+      <div class="s">Уже загружено фото: ${s.photos.length}</div>
+      <textarea class="field" placeholder="Подпись: что было сделано за смену" id="my-cap-${s.id}" rows="1"></textarea>
+      <label class="btn sm primary" style="cursor:pointer;text-align:center">+ Загрузить фото<input type="file" accept="image/*" capture="environment" class="hidden" onchange="uploadMyShiftPhoto(${s.id},this)"></label>
+    </div>`).join('')}
+    </div>
+    <div class="actions"><button class="btn" onclick="closeSheet()">Готово</button></div>`;
+  $('ov').classList.add('on');
+}
+async function uploadMyShiftPhoto(shiftId,input){
+  const file=input.files[0];if(!file)return;
+  const capEl=$('my-cap-'+shiftId),caption=capEl?capEl.value.trim():'';
+  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot','extra');fd.append('caption',caption);fd.append('file',file);
+  try{
+    const r=await fetch('/api/shifts/photos',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
+    let data=null;try{data=await r.json()}catch(e){}
+    if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
+    toast('Фото добавлено ✅');closeSheet();loadPhotos();
+  }catch(e){toast(e.message||'Ошибка загрузки')}
+  input.value='';
+}
+
+/* ---------- СТЕНА ПОЗОРА ---------- */
+let shameList=[];
+async function loadShame(){
+  if(!staffList.length){try{staffList=await api('/api/staff')}catch(e){}}
+  const sel=$('sh-tag');
+  if(sel&&sel.options.length<=1){
+    sel.innerHTML='<option value="">Не отмечать никого</option>'+staffList.filter(u=>u.id!==me.id).map(u=>`<option value="${u.id}">${esc(u.name)} — ${esc(ROLES[u.role]||'')}</option>`).join('');
+  }
+  const r=await run(()=>api('/api/shame'));if(!r)return;
+  shameList=r;renderShame();
+}
+function fmtShameDate(ts){
+  const d=new Date(ts*1000);
+  return d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+function renderShame(){
+  $('shame-list').innerHTML=shameList.length?shameList.map(p=>`
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+        <div><div class="t" style="font-weight:600">${esc(p.user_name)}</div>
+          <div class="s muted">${fmtShameDate(p.created_at)}${p.tagged_user_name?` · отмечен: <b>${esc(p.tagged_user_name)}</b>`:''}</div></div>
+        ${isAdmin()?`<button class="btn sm danger" onclick="deleteShame(${p.id})">Удалить</button>`:''}
+      </div>
+      <img src="/api/shame/${p.id}/file?token=${encodeURIComponent(token||'')}" style="width:100%;max-height:420px;object-fit:cover;border-radius:14px;margin:12px 0;cursor:pointer" onclick="window.open('/api/shame/${p.id}/file?token=${encodeURIComponent(token||'')}','_blank')">
+      ${p.caption?`<p style="margin:0 0 10px">${esc(p.caption)}</p>`:''}
+      <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px">
+        ${p.comments.map(c=>`<div style="margin-bottom:8px;font-size:15px"><b>${esc(c.user_name)}:</b> ${esc(c.text)} <span class="muted" style="font-size:12px">· ${fmtShameDate(c.created_at)}</span></div>`).join('')}
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input class="field" placeholder="Комментарий…" id="sh-c-${p.id}" style="flex:1" onkeydown="if(event.key==='Enter')submitShameComment(${p.id})">
+          <button class="btn sm" onclick="submitShameComment(${p.id})">➤</button>
+        </div>
+      </div>
+    </div>`).join(''):'<div class="row muted">Пока нет записей</div>';
+}
+async function submitShame(){
+  const fileInput=$('sh-file'),file=fileInput.files[0];
+  if(!file)return toast('Выберите фото');
+  const caption=$('sh-caption').value.trim(),tagged=$('sh-tag').value;
+  const fd=new FormData();fd.append('file',file);fd.append('caption',caption);if(tagged)fd.append('tagged_user_id',tagged);
+  try{
+    const r=await fetch('/api/shame',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
+    let data=null;try{data=await r.json()}catch(e){}
+    if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
+    toast('Опубликовано ✅');
+    fileInput.value='';$('sh-file-label').textContent='📷 Выбрать фото';$('sh-caption').value='';$('sh-tag').value='';
+    loadShame();
+  }catch(e){toast(e.message||'Ошибка загрузки')}
+}
+async function submitShameComment(id){
+  const inp=$('sh-c-'+id),text=inp.value.trim();if(!text)return;
+  const r=await run(()=>api(`/api/shame/${id}/comments`,{method:'POST',body:{text}}));
+  if(r){inp.value='';loadShame()}
+}
+async function deleteShame(id){
+  if(!confirm('Удалить запись со стены позора?'))return;
+  const r=await run(()=>api(`/api/shame/${id}`,{method:'DELETE'}));
+  if(r){toast('Удалено');loadShame()}
 }
 
 /* ---------- ЗАМЕТКИ ---------- */
@@ -1100,7 +1244,30 @@ async function refreshPending(){
   const n=users.filter(u=>u.status==='pending').length;
   $('pending-badge').textContent=n;$('pending-badge').classList.toggle('hidden',!n);
 }
+let archivesList=[];
+async function loadArchives(){
+  const r=await run(()=>api('/api/archives'));if(!r)return;
+  archivesList=r;renderArchives();
+}
+function fmtArchiveDate(ts){
+  const d=new Date(ts*1000);
+  return d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+function renderArchives(){
+  const cat={reports:'Отчёты смен',shame:'Стена позора'};
+  $('archives-list').innerHTML=archivesList.length?archivesList.map(a=>`
+    <div class="row"><div><div class="t">${cat[a.category]||a.category}</div>
+      <div class="s">${a.item_count} фото · создан ${fmtArchiveDate(a.created_at)} · удалится ${fmtArchiveDate(a.expires_at)}</div></div>
+    <a class="btn sm" href="/api/archives/${a.id}/download?token=${encodeURIComponent(token||'')}" target="_blank">⬇ Скачать .zip</a></div>`).join(''):'<div class="row muted">Архивов пока нет</div>';
+}
+async function forceArchive(){
+  if(!confirm('Архивировать все текущие фото отчётов и стены позора прямо сейчас? Оригиналы будут упакованы в ZIP и удалены из общего доступа.'))return;
+  const r=await run(()=>api('/api/archives/force',{method:'POST'}));
+  if(r){toast('Архивация выполнена ✅');loadArchives();if(tab==='photos')loadPhotos();if(tab==='shame')loadShame()}
+}
 async function loadTeam(){
+  await loadArchives();
+  if(!isAdmin())return;
   await refreshPending();
   const pend=users.filter(u=>u.status==='pending'),act=users.filter(u=>u.status==='approved');
   $('pending').innerHTML=pend.length?pend.map(u=>`<div class="row"><div><div class="t">${esc(u.name)}</div><div class="s">@${esc(u.username)} · ${esc(u.created_at||'')}</div></div>

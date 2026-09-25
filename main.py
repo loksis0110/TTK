@@ -8,6 +8,7 @@ import hmac
 import secrets
 import re
 import time
+import zipfile
 from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager, contextmanager, AsyncExitStack
 from typing import Optional, List
@@ -44,9 +45,17 @@ MASTER_PASSWORD = "admin123"
 
 # Фото смены: храним рядом с базой (на том же примонтированном volume в Railway), чтобы не терять файлы при деплое.
 PHOTOS_DIR = os.getenv("PHOTOS_DIR") or os.path.join(os.path.dirname(os.path.abspath(DB_PATH)) or ".", "shift_photos")
-PHOTO_MAX_BYTES = 12 * 1024 * 1024          # 12 МБ на файл
-PHOTO_RETENTION_DAYS = 3                    # автоудаление старых фото
 PHOTO_REMINDER_MINUTES = 5                  # напомнить за 5 минут до срока
+
+# Стена позора: фото + подпись + отметка сотрудника + комментарии.
+SHAME_DIR = os.getenv("SHAME_DIR") or os.path.join(os.path.dirname(os.path.abspath(DB_PATH)) or ".", "shame_photos")
+
+# Архивация: раз в ARCHIVE_INTERVAL_DAYS дней фото отчётов смен и фото со стены позора упаковываются
+# в отдельные ZIP-архивы (файлы внутри подписываются как "Дата_Кто загрузил"), а оригиналы удаляются.
+# Архив хранится до следующей архивации этой же категории, после чего удаляется автоматически.
+ARCHIVES_DIR = os.getenv("ARCHIVES_DIR") or os.path.join(os.path.dirname(os.path.abspath(DB_PATH)) or ".", "archives")
+ARCHIVE_INTERVAL_DAYS = 3
+TEAM_ROLES = {"master", "bar_manager", "senior_bartender"}   # видят архивы во вкладке «Команда»
 
 # Какие фото-чекпоинты нужны для смены (по времени начала/конца). Для смен, не описанных здесь,
 # по умолчанию требуется одно фото к моменту окончания смены.
@@ -408,6 +417,27 @@ def init_db():
         c.execute("CREATE INDEX IF NOT EXISTS idx_shift_photos_day ON shift_photos(day)")
         c.execute("""CREATE TABLE IF NOT EXISTS photo_reminders_sent (
             shift_id INTEGER NOT NULL, slot TEXT NOT NULL, PRIMARY KEY (shift_id, slot))""")
+        try:
+            c.execute("ALTER TABLE shift_photos ADD COLUMN caption TEXT NOT NULL DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
+
+        # Стена позора: посты (фото + подпись + отметка) и комментарии к ним.
+        c.execute("""CREATE TABLE IF NOT EXISTS shame_posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, day TEXT NOT NULL,
+            caption TEXT NOT NULL DEFAULT '', file_path TEXT NOT NULL, tagged_user_id INTEGER,
+            created_at INTEGER NOT NULL)""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_shame_posts_day ON shame_posts(day)")
+        c.execute("""CREATE TABLE IF NOT EXISTS shame_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            text TEXT NOT NULL, created_at INTEGER NOT NULL)""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_shame_comments_post ON shame_comments(post_id)")
+
+        # Архивы: раз в ARCHIVE_INTERVAL_DAYS дней — по одной записи на категорию ('reports' / 'shame').
+        c.execute("""CREATE TABLE IF NOT EXISTS archives (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT NOT NULL, file_path TEXT NOT NULL,
+            item_count INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_archives_category ON archives(category)")
 
         if c.execute("SELECT COUNT(*) FROM checklist_items").fetchone()[0] == 0:
             for shift, items in CHECKLIST_SEED.items():
@@ -475,6 +505,19 @@ def require_schedule_editor(user: dict = Depends(current_user)) -> dict:
 def require_not_waiter(user: dict = Depends(current_user)) -> dict:
     """Для действий, доступных всем ролям, кроме официанта (например, принудительная отправка заявки)."""
     if user["role"] == "waiter":
+        raise HTTPException(403, "Недостаточно прав")
+    return user
+
+
+def require_team(user: dict = Depends(current_user)) -> dict:
+    """Архивы во вкладке «Команда» видят старший бармен, бар-менеджер и мастер."""
+    if user["role"] not in TEAM_ROLES:
+        raise HTTPException(403, "Недостаточно прав")
+    return user
+
+
+def require_team_flexible(user: dict = Depends(current_user_flexible)) -> dict:
+    if user["role"] not in TEAM_ROLES:
         raise HTTPException(403, "Недостаточно прав")
     return user
 
@@ -587,7 +630,7 @@ async def lifespan(app: FastAPI):
                       misfire_grace_time=3600, coalesce=True, max_instances=1)
     scheduler.add_job(check_photo_reminders, "cron", minute="*", second=5,
                       misfire_grace_time=50, coalesce=True, max_instances=1)
-    scheduler.add_job(cleanup_old_photos, "interval", days=PHOTO_RETENTION_DAYS,
+    scheduler.add_job(run_archiving, "interval", days=ARCHIVE_INTERVAL_DAYS,
                       misfire_grace_time=3600, coalesce=True, max_instances=1)
     scheduler.start()
     async with AsyncExitStack() as stack:
@@ -1150,36 +1193,64 @@ async def photo_status(day: Optional[str] = None, user: dict = Depends(current_u
                 checkpoints.append({
                     "slot": cp["slot"], "due_at": cp["due_dt"].strftime("%H:%M"),
                     "uploaded": bool(p), "photo_id": p["id"] if p else None,
+                    "caption": (p["caption"] if p else "") or "",
                     "overdue": (not p) and now > cp["due_dt"],
                 })
+            extra = c.execute("SELECT * FROM shift_photos WHERE shift_id=? AND slot LIKE 'extra_%' ORDER BY uploaded_at",
+                              (s["id"],)).fetchall()
             result.append({"shift_id": s["id"], "user_id": s["user_id"], "user_name": s["user_name"],
-                            "start": s["start"], "end": s["end"], "checkpoints": checkpoints})
+                            "start": s["start"], "end": s["end"], "checkpoints": checkpoints,
+                            "extra_photos": [{"id": p["id"], "caption": p["caption"] or "", "uploaded_at": p["uploaded_at"]} for p in extra]})
+    return result
+
+
+@app.get("/api/shifts/photos/mine")
+async def my_shift_photos(days: int = 14, user: dict = Depends(current_user)):
+    """Смены пользователя за последние N дней с уже загруженными фото — чтобы можно было
+    задним числом дозагрузить забытый отчёт, выбрав свою смену."""
+    days = min(max(days, 1), 60)
+    start = (datetime.now(MSK) - timedelta(days=days)).strftime("%Y-%m-%d")
+    end = datetime.now(MSK).strftime("%Y-%m-%d")
+    with db() as c:
+        rows = c.execute(SHIFT_SQL + " WHERE s.day BETWEEN ? AND ? AND s.user_id=? ORDER BY s.day DESC, s.start_time",
+                         (start, end, user["id"])).fetchall()
+        result = []
+        for r in rows:
+            s = shift_dict(r)
+            photos = c.execute("SELECT id, slot, caption, uploaded_at FROM shift_photos WHERE shift_id=? ORDER BY uploaded_at",
+                               (s["id"],)).fetchall()
+            result.append({**s, "photos": [dict(p) for p in photos]})
     return result
 
 
 @app.post("/api/shifts/photos")
-async def upload_shift_photo(shift_id: int = Form(...), slot: str = Form(...),
+async def upload_shift_photo(shift_id: int = Form(...), slot: str = Form(...), caption: str = Form(""),
                               file: UploadFile = File(...), user: dict = Depends(current_user)):
     with db() as c:
         s = get_shift(c, shift_id)
     if user["role"] not in ADMIN_ROLES and s["user_id"] != user["id"]:
         raise HTTPException(403, "Это фото можно загрузить только для своей смены")
-    valid_slots = {cp["slot"]: cp for cp in photo_checkpoints_for_shift(s)}
-    if slot not in valid_slots:
-        raise HTTPException(400, "Для этой смены не требуется фото в это время")
+    if slot == "extra":
+        # Дополнительное фото отчёта — без ограничения по количеству, можно добавлять сколько угодно.
+        day = s["date"]
+        real_slot = f"extra_{int(time.time() * 1000)}_{secrets.token_hex(3)}"
+    else:
+        valid_slots = {cp["slot"]: cp for cp in photo_checkpoints_for_shift(s)}
+        if slot not in valid_slots:
+            raise HTTPException(400, "Для этой смены не требуется фото в это время")
+        day = valid_slots[slot]["date"]
+        real_slot = slot
     if not (file.content_type or "").startswith("image/"):
         raise HTTPException(400, "Нужно загрузить изображение")
     data = await file.read()
-    if len(data) > PHOTO_MAX_BYTES:
-        raise HTTPException(400, "Файл слишком большой (максимум 12 МБ)")
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic"}.get(file.content_type, "jpg")
-    day = valid_slots[slot]["date"]
     day_dir = os.path.join(PHOTOS_DIR, day)
     os.makedirs(day_dir, exist_ok=True)
-    fname = f"{shift_id}_{slot.replace(':', '')}_{int(time.time())}.{ext}"
+    fname = f"{shift_id}_{real_slot.replace(':', '')}_{int(time.time())}.{ext}"
     fpath = os.path.join(day_dir, fname)
     with db() as c:
-        old = c.execute("SELECT file_path FROM shift_photos WHERE shift_id=? AND slot=?", (shift_id, slot)).fetchone()
+        old = None if slot == "extra" else c.execute(
+            "SELECT file_path FROM shift_photos WHERE shift_id=? AND slot=?", (shift_id, real_slot)).fetchone()
         with open(fpath, "wb") as f:
             f.write(data)
         if old:
@@ -1188,9 +1259,9 @@ async def upload_shift_photo(shift_id: int = Form(...), slot: str = Form(...),
                     os.remove(old["file_path"])
             except OSError:
                 pass
-        c.execute("""INSERT INTO shift_photos (shift_id, user_id, day, slot, file_path, uploaded_at) VALUES (?,?,?,?,?,?)
-                     ON CONFLICT(shift_id, slot) DO UPDATE SET file_path=excluded.file_path, uploaded_at=excluded.uploaded_at""",
-                  (shift_id, s["user_id"], day, slot, fpath, int(time.time())))
+        c.execute("""INSERT INTO shift_photos (shift_id, user_id, day, slot, file_path, uploaded_at, caption) VALUES (?,?,?,?,?,?,?)
+                     ON CONFLICT(shift_id, slot) DO UPDATE SET file_path=excluded.file_path, uploaded_at=excluded.uploaded_at, caption=excluded.caption""",
+                  (shift_id, s["user_id"], day, real_slot, fpath, int(time.time()), caption.strip()[:1000]))
     return {"status": "success"}
 
 
@@ -1217,19 +1288,9 @@ async def remind_photo_now(shift_id: int = Form(...), slot: str = Form(...), act
     return {"status": "success"}
 
 
-@app.delete("/api/shifts/photos/{photo_id}")
-async def delete_shift_photo(photo_id: int, actor: dict = Depends(require_admin)):
-    with db() as c:
-        r = c.execute("SELECT * FROM shift_photos WHERE id=?", (photo_id,)).fetchone()
-        if not r:
-            raise HTTPException(404, "Фото не найдено")
-        try:
-            if os.path.exists(r["file_path"]):
-                os.remove(r["file_path"])
-        except OSError:
-            pass
-        c.execute("DELETE FROM shift_photos WHERE id=?", (photo_id,))
-    return {"status": "success"}
+# Примечание: обычное удаление отдельных фото отчёта смены намеренно недоступно — вместо этого
+# фото каждые ARCHIVE_INTERVAL_DAYS дней упаковываются в подписанный ZIP-архив (см. run_archiving ниже),
+# который хранится во вкладке «Команда» до следующей архивации.
 
 
 async def check_photo_reminders():
@@ -1254,21 +1315,249 @@ async def check_photo_reminders():
                           f"Через {PHOTO_REMINDER_MINUTES} мин нужно сфотографировать бар (к {cp['slot']})", "/#photos")
 
 
-async def cleanup_old_photos():
-    """Раз в PHOTO_RETENTION_DAYS дней удаляет фото старше этого срока, чтобы экономить место."""
-    cutoff = int(time.time()) - PHOTO_RETENTION_DAYS * 86400
+# ======================= СТЕНА ПОЗОРА =======================
+class ShameCommentIn(BaseModel):
+    text: str
+
+
+def shame_post_dict(c, r, umap: dict) -> dict:
+    comments = c.execute("SELECT * FROM shame_comments WHERE post_id=? ORDER BY created_at", (r["id"],)).fetchall()
+    return {
+        "id": r["id"], "day": r["day"], "caption": r["caption"] or "", "created_at": r["created_at"],
+        "user_id": r["user_id"], "user_name": umap.get(r["user_id"], "Удалён"),
+        "tagged_user_id": r["tagged_user_id"],
+        "tagged_user_name": umap.get(r["tagged_user_id"]) if r["tagged_user_id"] else None,
+        "comments": [{"id": cm["id"], "user_id": cm["user_id"], "user_name": umap.get(cm["user_id"], "Удалён"),
+                      "text": cm["text"], "created_at": cm["created_at"]} for cm in comments],
+    }
+
+
+@app.get("/api/shame")
+async def list_shame(limit: int = 60, user: dict = Depends(current_user)):
+    limit = min(max(limit, 1), 200)
     with db() as c:
-        rows = c.execute("SELECT id, file_path FROM shift_photos WHERE uploaded_at < ?", (cutoff,)).fetchall()
+        rows = c.execute("SELECT * FROM shame_posts ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
+        return [shame_post_dict(c, r, umap) for r in rows]
+
+
+@app.post("/api/shame")
+async def create_shame(caption: str = Form(""), tagged_user_id: Optional[int] = Form(None),
+                        file: UploadFile = File(...), user: dict = Depends(current_user)):
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(400, "Нужно загрузить изображение")
+    data = await file.read()
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic"}.get(file.content_type, "jpg")
+    day = datetime.now(MSK).strftime("%Y-%m-%d")
+    day_dir = os.path.join(SHAME_DIR, day)
+    os.makedirs(day_dir, exist_ok=True)
+    fname = f"{user['id']}_{int(time.time() * 1000)}.{ext}"
+    fpath = os.path.join(day_dir, fname)
+    with open(fpath, "wb") as f:
+        f.write(data)
+    with db() as c:
+        if tagged_user_id and not c.execute("SELECT 1 FROM users WHERE id=? AND status='approved'", (tagged_user_id,)).fetchone():
+            raise HTTPException(400, "Отмеченный пользователь не найден")
+        cur = c.execute("""INSERT INTO shame_posts (user_id, day, caption, file_path, tagged_user_id, created_at)
+                          VALUES (?,?,?,?,?,?)""",
+                        (user["id"], day, caption.strip()[:1000], fpath, tagged_user_id, int(time.time())))
+        post_id = cur.lastrowid
+    if tagged_user_id and tagged_user_id != user["id"]:
+        send_push([tagged_user_id], "Стена позора",
+                  f"{user['name']} отметил(а) вас в записи на стене позора", "/#shame")
+    return {"id": post_id, "status": "success"}
+
+
+@app.get("/api/shame/{post_id}/file")
+async def get_shame_file(post_id: int, user: dict = Depends(current_user_flexible)):
+    with db() as c:
+        r = c.execute("SELECT * FROM shame_posts WHERE id=?", (post_id,)).fetchone()
+    if not r or not os.path.exists(r["file_path"]):
+        raise HTTPException(404, "Фото не найдено")
+    return FileResponse(r["file_path"])
+
+
+@app.post("/api/shame/{post_id}/comments")
+async def add_shame_comment(post_id: int, body: ShameCommentIn, user: dict = Depends(current_user)):
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(400, "Пустой комментарий")
+    with db() as c:
+        post = c.execute("SELECT * FROM shame_posts WHERE id=?", (post_id,)).fetchone()
+        if not post:
+            raise HTTPException(404, "Запись не найдена")
+        c.execute("INSERT INTO shame_comments (post_id, user_id, text, created_at) VALUES (?,?,?,?)",
+                  (post_id, user["id"], text[:1000], int(time.time())))
+    notify_ids = {post["user_id"]}
+    if post["tagged_user_id"]:
+        notify_ids.add(post["tagged_user_id"])
+    notify_ids.discard(user["id"])
+    if notify_ids:
+        send_push(list(notify_ids), "Новый комментарий", f"{user['name']}: {text[:120]}", "/#shame")
+    return {"status": "success"}
+
+
+@app.delete("/api/shame/{post_id}")
+async def delete_shame_post(post_id: int, admin: dict = Depends(require_admin)):
+    with db() as c:
+        r = c.execute("SELECT * FROM shame_posts WHERE id=?", (post_id,)).fetchone()
+        if not r:
+            raise HTTPException(404, "Запись не найдена")
+        try:
+            if os.path.exists(r["file_path"]):
+                os.remove(r["file_path"])
+        except OSError:
+            pass
+        c.execute("DELETE FROM shame_comments WHERE post_id=?", (post_id,))
+        c.execute("DELETE FROM shame_posts WHERE id=?", (post_id,))
+    return {"status": "success"}
+
+
+# ======================= АРХИВАЦИЯ (каждые ARCHIVE_INTERVAL_DAYS дней) =======================
+def safe_fs_name(name: str) -> str:
+    name = re.sub(r"[^\w\-]+", "_", name or "", flags=re.UNICODE).strip("_")
+    return name or "user"
+
+
+def unique_arcname(day: str, who: str, ext: str, used: set) -> str:
+    """Формирует имя файла внутри архива в формате Дата_Кто-загрузил, разруливая совпадения."""
+    base = f"{day}_{safe_fs_name(who)}"
+    name = f"{base}.{ext}"
+    i = 2
+    while name in used:
+        name = f"{base}_{i}.{ext}"
+        i += 1
+    used.add(name)
+    return name
+
+
+def build_archive_zip(category: str, items: list, manifest_lines: list) -> Optional[str]:
+    """items: список (file_path, day, who). Пишет ZIP в ARCHIVES_DIR и возвращает путь, либо None, если архивировать нечего.
+    Внутри архива — сами фото, подписанные как Дата_Кто-загрузил, плюс текстовый файл 'описание.txt'
+    со сменой/чек-поинтом/подписью/комментариями для каждого файла — так подпись не теряется при упаковке."""
+    items = [it for it in items if os.path.exists(it[0])]
+    if not items:
+        return None
+    os.makedirs(ARCHIVES_DIR, exist_ok=True)
+    zip_path = os.path.join(ARCHIVES_DIR, f"{category}_{int(time.time())}.zip")
+    used: set = set()
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file_path, day, who in items:
+            ext = (os.path.splitext(file_path)[1] or ".jpg").lstrip(".")
+            zf.write(file_path, unique_arcname(day, who, ext, used))
+        zf.writestr("описание.txt", "\n".join(manifest_lines) if manifest_lines else "Записей нет.")
+    return zip_path
+
+
+def replace_archive(c, category: str, zip_path: str, item_count: int):
+    """Архив хранится только до следующей архивации той же категории — предыдущий удаляется."""
+    old = c.execute("SELECT id, file_path FROM archives WHERE category=?", (category,)).fetchall()
+    for o in old:
+        try:
+            if os.path.exists(o["file_path"]):
+                os.remove(o["file_path"])
+        except OSError:
+            pass
+    c.execute("DELETE FROM archives WHERE category=?", (category,))
+    now = int(time.time())
+    c.execute("INSERT INTO archives (category, file_path, item_count, created_at, expires_at) VALUES (?,?,?,?,?)",
+              (category, zip_path, item_count, now, now + ARCHIVE_INTERVAL_DAYS * 86400))
+
+
+async def run_archiving(manual: bool = False) -> dict:
+    """Раз в ARCHIVE_INTERVAL_DAYS дней: фото отчётов смен и фото со стены позора упаковываются
+    каждое в свой ZIP-архив (файлы подписаны как Дата_Кто-загрузил), оригиналы удаляются.
+    Архив хранится до следующей архивации этой же категории (максимум ARCHIVE_INTERVAL_DAYS дней),
+    после чего удаляется автоматически."""
+    created = {}
+    with db() as c:
+        # --- Отчёты смены ---
+        rows = c.execute("""SELECT sp.id, sp.file_path, sp.day, sp.slot, sp.caption, COALESCE(u.name, 'Сотрудник') AS who
+                             FROM shift_photos sp LEFT JOIN users u ON u.id = sp.user_id""").fetchall()
+        manifest = [f"{r['day']} · {r['who']} · {r['slot']}" + (f" — {r['caption']}" if r["caption"] else "") for r in rows]
+        zip_path = build_archive_zip("reports", [(r["file_path"], r["day"], r["who"]) for r in rows], manifest)
+        if zip_path:
+            replace_archive(c, "reports", zip_path, len(rows))
+            for r in rows:
+                try:
+                    if os.path.exists(r["file_path"]):
+                        os.remove(r["file_path"])
+                except OSError:
+                    pass
+            c.execute("DELETE FROM shift_photos")
+            created["reports"] = len(rows)
+
+        # --- Стена позора ---
+        rows = c.execute("""SELECT sp.id, sp.file_path, sp.day, sp.caption, sp.tagged_user_id, COALESCE(u.name, 'Сотрудник') AS who
+                             FROM shame_posts sp LEFT JOIN users u ON u.id = sp.user_id""").fetchall()
+        umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
+        manifest = []
         for r in rows:
+            tagged = f", отмечен: {umap.get(r['tagged_user_id'])}" if r["tagged_user_id"] else ""
+            comments = c.execute("SELECT text FROM shame_comments WHERE post_id=?", (r["id"],)).fetchall()
+            cm = ("; комментарии: " + " | ".join(x["text"] for x in comments)) if comments else ""
+            manifest.append(f"{r['day']} · {r['who']}{tagged} — {r['caption']}{cm}")
+        zip_path = build_archive_zip("shame", [(r["file_path"], r["day"], r["who"]) for r in rows], manifest)
+        if zip_path:
+            replace_archive(c, "shame", zip_path, len(rows))
+            post_ids = [r["id"] for r in rows]
+            for r in rows:
+                try:
+                    if os.path.exists(r["file_path"]):
+                        os.remove(r["file_path"])
+                except OSError:
+                    pass
+            if post_ids:
+                q = ",".join("?" * len(post_ids))
+                c.execute(f"DELETE FROM shame_comments WHERE post_id IN ({q})", post_ids)
+            c.execute("DELETE FROM shame_posts")
+            created["shame"] = len(rows)
+
+        # Старые напоминания о фото больше не нужны
+        cutoff_day = (datetime.now(MSK) - timedelta(days=ARCHIVE_INTERVAL_DAYS + 2)).strftime("%Y-%m-%d")
+        c.execute("DELETE FROM photo_reminders_sent WHERE shift_id IN (SELECT id FROM shifts WHERE day<?)", (cutoff_day,))
+
+        # Подстраховка: архив, который пережил свой срок хранения, удаляется в любом случае
+        expired = c.execute("SELECT id, file_path FROM archives WHERE expires_at < ?", (int(time.time()),)).fetchall()
+        for r in expired:
             try:
                 if os.path.exists(r["file_path"]):
                     os.remove(r["file_path"])
-            except OSError as e:
-                logger.warning(f"Не удалось удалить фото {r['file_path']}: {e}")
-        c.execute("DELETE FROM shift_photos WHERE uploaded_at < ?", (cutoff,))
-        cutoff_day = (datetime.now(MSK) - timedelta(days=PHOTO_RETENTION_DAYS + 2)).strftime("%Y-%m-%d")
-        c.execute("DELETE FROM photo_reminders_sent WHERE shift_id IN (SELECT id FROM shifts WHERE day<?)", (cutoff_day,))
-    logger.info(f"Автоудаление фото смен: удалено {len(rows)} файлов старше {PHOTO_RETENTION_DAYS} дн.")
+            except OSError:
+                pass
+        c.execute("DELETE FROM archives WHERE expires_at < ?", (int(time.time()),))
+
+    logger.info(f"Архивация {'(вручную) ' if manual else ''}завершена: {created}")
+    return created
+
+
+def archive_dict(r) -> dict:
+    return {"id": r["id"], "category": r["category"], "item_count": r["item_count"],
+            "created_at": r["created_at"], "expires_at": r["expires_at"], "filename": os.path.basename(r["file_path"])}
+
+
+@app.get("/api/archives")
+async def list_archives(actor: dict = Depends(require_team)):
+    with db() as c:
+        rows = c.execute("SELECT * FROM archives ORDER BY created_at DESC").fetchall()
+    return [archive_dict(r) for r in rows]
+
+
+@app.get("/api/archives/{archive_id}/download")
+async def download_archive(archive_id: int, actor: dict = Depends(require_team_flexible)):
+    with db() as c:
+        r = c.execute("SELECT * FROM archives WHERE id=?", (archive_id,)).fetchone()
+    if not r or not os.path.exists(r["file_path"]):
+        raise HTTPException(404, "Архив не найден")
+    return FileResponse(r["file_path"], filename=os.path.basename(r["file_path"]), media_type="application/zip")
+
+
+@app.post("/api/archives/force")
+async def force_archive(actor: dict = Depends(require_team)):
+    """Кнопка «Архивировать сейчас» — запускает архивацию немедленно, не дожидаясь расписания."""
+    result = await run_archiving(manual=True)
+    logger.info(f"Принудительная архивация запущена пользователем {actor['name']}")
+    return {"status": "success", "archived": result}
 
 
 # ======================= ЧЕК-ЛИСТ СМЕНЫ =======================
