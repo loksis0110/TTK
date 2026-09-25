@@ -42,6 +42,39 @@ async function cacheFirst(request) {
   return cached || network || caches.match('/');
 }
 
+// Push-уведомления
+self.addEventListener('push', (event) => {
+  let data = { title: 'Тугай ТТК', body: 'У вас новое уведомление', url: '/' };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch (err) {}
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/logo.png',
+      badge: '/logo.png',
+      data: { url: data.url || '/' },
+      vibrate: [80, 40, 80],
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.navigate(url).catch(() => {});
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);

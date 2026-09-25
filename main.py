@@ -9,7 +9,7 @@ import secrets
 import re
 import time
 from datetime import datetime, timedelta, timezone
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, AsyncExitStack
 from typing import Optional, List
 
 from fastapi import FastAPI, HTTPException, Depends, Header
@@ -20,6 +20,15 @@ from pydantic import BaseModel
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from pywebpush import webpush, WebPushException
+
+try:
+    from maxapi import Bot as MaxBot, Dispatcher as MaxDispatcher
+    from maxapi.filters.command import Command as MaxCommand
+    from maxapi.types import MessageCreated as MaxMessageCreated, BotStarted as MaxBotStarted
+    from maxapi.webhook.fastapi import FastAPIMaxWebhook
+except ImportError:
+    MaxBot = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,8 +45,45 @@ MASTER_PASSWORD = "admin123"
 ORDER_HOUR, ORDER_MINUTE = 7, 0          # заявка уходит в 07:00 по Москве
 MSK = timezone(timedelta(hours=3))
 
+# Web Push (браузерные уведомления). Ключи сгенерировать один раз и положить в переменные окружения Railway.
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_CLAIMS_EMAIL = os.getenv("VAPID_CLAIMS_EMAIL", "mailto:admin@example.com")
+
+# MAX (мессенджер) — бот-уведомления через webhook. Токен берётся у @MasterBot в MAX.
+MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
+MAX_CHAT_ID = os.getenv("MAX_CHAT_ID", "")  # id группы/чата, куда дублировать заявку (необязательно)
+MAX_WEBHOOK_PATH = "/max/webhook"
+
 bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
 scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
+
+# MAX-бот и диспетчер (создаём, только если библиотека установлена и токен задан)
+max_bot = MaxBot(token=MAX_BOT_TOKEN) if (MaxBot and MAX_BOT_TOKEN) else None
+max_dp = MaxDispatcher() if max_bot else None
+
+if max_bot:
+    @max_dp.bot_started()
+    async def max_bot_started(event: "MaxBotStarted"):
+        await max_bot.send_message(chat_id=event.chat_id, text="Привет! Я бот бара «Тугай». Команда «заявка» покажет текущий список закупки.")
+
+    @max_dp.message_created(MaxCommand("start"))
+    async def max_hello(event: "MaxMessageCreated"):
+        await event.message.answer("Привет! Я бот бара «Тугай». Команда «заявка» покажет текущий список закупки.")
+
+    @max_dp.message_created()
+    async def max_router(event: "MaxMessageCreated"):
+        text = (event.message.body.text or "").strip().lower()
+        if text in ("заявка", "статус", "/order"):
+            with db() as c:
+                rows = c.execute("SELECT item_name, quantity FROM active_order ORDER BY timestamp ASC").fetchall()
+            if not rows:
+                await event.message.answer("Заявка сейчас пуста.")
+            else:
+                lines = [f"• {r['item_name']} — {r['quantity']}" for r in rows]
+                await event.message.answer("Текущая заявка:\n" + "\n".join(lines))
+        else:
+            await event.message.answer("Доступные команды: /start, «заявка» — показать текущий список закупки.")
 
 # === РОЛИ ===
 ROLES = {
@@ -337,6 +383,11 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+        c.execute("""CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL)""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)")
+
         if c.execute("SELECT COUNT(*) FROM checklist_items").fetchone()[0] == 0:
             for shift, items in CHECKLIST_SEED.items():
                 for pos, (title, details) in enumerate(items):
@@ -406,6 +457,70 @@ class RoleIn(BaseModel):
     role: str
 
 
+class PushKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscribeIn(BaseModel):
+    endpoint: str
+    keys: PushKeys
+
+
+class PushUnsubscribeIn(BaseModel):
+    endpoint: str
+
+
+# ======================= PUSH-УВЕДОМЛЕНИЯ =======================
+def send_push(user_ids: List[int], title: str, body: str, url: str = "/"):
+    """Отправляет браузерный push пользователям. Молча ничего не делает, если VAPID-ключи не заданы."""
+    if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY or not user_ids:
+        return
+    payload = json.dumps({"title": title, "body": body, "url": url}, ensure_ascii=False)
+    with db() as c:
+        q = ",".join("?" * len(user_ids))
+        subs = c.execute(f"SELECT * FROM push_subscriptions WHERE user_id IN ({q})", user_ids).fetchall()
+        for s in subs:
+            try:
+                webpush(
+                    subscription_info={
+                        "endpoint": s["endpoint"],
+                        "keys": {"p256dh": s["p256dh"], "auth": s["auth"]},
+                    },
+                    data=payload,
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": VAPID_CLAIMS_EMAIL},
+                )
+            except WebPushException as e:
+                code = getattr(e.response, "status_code", None)
+                if code in (404, 410):
+                    c.execute("DELETE FROM push_subscriptions WHERE id=?", (s["id"],))
+                else:
+                    logger.warning(f"Push не доставлен: {e}")
+
+
+@app.get("/api/push/public_key")
+async def push_public_key():
+    return {"key": VAPID_PUBLIC_KEY}
+
+
+@app.post("/api/push/subscribe")
+async def push_subscribe(body: PushSubscribeIn, user: dict = Depends(current_user)):
+    with db() as c:
+        c.execute("""INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at)
+                     VALUES (?,?,?,?,?)
+                     ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id, p256dh=excluded.p256dh, auth=excluded.auth""",
+                  (user["id"], body.endpoint, body.keys.p256dh, body.keys.auth, int(time.time())))
+    return {"status": "success"}
+
+
+@app.post("/api/push/unsubscribe")
+async def push_unsubscribe(body: PushUnsubscribeIn, user: dict = Depends(current_user)):
+    with db() as c:
+        c.execute("DELETE FROM push_subscriptions WHERE endpoint=? AND user_id=?", (body.endpoint, user["id"]))
+    return {"status": "success"}
+
+
 # ======================= TELEGRAM (только 07:00) =======================
 async def send_order_to_tg():
     with db() as c:
@@ -427,6 +542,15 @@ async def send_order_to_tg():
         message = "📦 <b>НОВАЯ ЗАЯВКА</b>\n\n" + "\n".join(items) + f"\n\n👤 <b>Кто составил:</b> {', '.join(authors)}"
         try:
             await bot.send_message(chat_id=CHAT_ID, text=message, parse_mode=ParseMode.HTML)
+            if max_bot and MAX_CHAT_ID:
+                try:
+                    plain = "НОВАЯ ЗАЯВКА\n\n" + "\n".join(
+                        f"• {r['item_name']} — {r['quantity']}" + (f" ({r['comment']})" if r["comment"] else "")
+                        for r in rows
+                    ) + f"\n\nКто составил: {', '.join(authors)}"
+                    await max_bot.send_message(chat_id=int(MAX_CHAT_ID), text=plain)
+                except Exception as e:
+                    logger.warning(f"Не удалось продублировать заявку в MAX: {e}")
             c.execute("DELETE FROM active_order")
             return True
         except Exception as e:
@@ -438,10 +562,16 @@ async def send_order_to_tg():
 async def lifespan(app: FastAPI):
     if not bot:
         logger.warning("BOT_TOKEN не задан: отправка в Telegram отключена")
+    if MaxBot and not MAX_BOT_TOKEN:
+        logger.info("MAX_BOT_TOKEN не задан: интеграция с MAX отключена")
     scheduler.add_job(send_order_to_tg, "cron", hour=ORDER_HOUR, minute=ORDER_MINUTE,
                       misfire_grace_time=3600, coalesce=True, max_instances=1)
     scheduler.start()
-    yield
+    async with AsyncExitStack() as stack:
+        if max_webhook:
+            # Регистрирует webhook в MAX при старте и снимает подписку при остановке.
+            await stack.enter_async_context(max_webhook.lifespan(app))
+        yield
     scheduler.shutdown()
     if bot:
         await bot.session.close()
@@ -450,6 +580,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+max_webhook = FastAPIMaxWebhook(dp=max_dp, bot=max_bot) if max_bot else None
+if max_webhook:
+    max_webhook.setup(app, path=MAX_WEBHOOK_PATH)
+
 
 
 # ======================= АККАУНТЫ =======================
@@ -753,6 +888,8 @@ async def add_shift(body: ShiftIn, actor: dict = Depends(require_schedule_editor
             s = get_shift(c, cur.lastrowid)
             log_change(c, actor, "add", f"Добавлена смена: {fmt_shift(s)}", None, s)
             created += 1
+    if created:
+        send_push([body.user_id], "Новая смена", f"Вам назначена смена: {fmt_shift(s)}", "/#schedule")
     return {"created": created}
 
 
@@ -768,6 +905,9 @@ async def edit_shift(sid: int, body: ShiftIn, actor: dict = Depends(require_sche
         after = get_shift(c, sid)
         if before != after:
             log_change(c, actor, "edit", f"Изменена смена: {fmt_shift(before)} → {fmt_shift(after)}", before, after)
+    if before != after:
+        notify_ids = {before["user_id"], after["user_id"]}
+        send_push(list(notify_ids), "Смена изменена", f"{fmt_shift(before)} → {fmt_shift(after)}", "/#schedule")
     return {"status": "success"}
 
 
@@ -790,6 +930,7 @@ async def swap_shifts(body: SwapIn, actor: dict = Depends(require_schedule_edito
         c.execute("UPDATE shifts SET user_id=? WHERE id=?", (a["user_id"], b["id"]))
         log_change(c, actor, "swap", f"Обмен сменами: {fmt_shift(a)} ⇄ {fmt_shift(b)}", [a, b],
                    [get_shift(c, a["id"]), get_shift(c, b["id"])])
+    send_push([a["user_id"], b["user_id"]], "Смены обменяны", f"{fmt_shift(a)} ⇄ {fmt_shift(b)}", "/#schedule")
     return {"status": "success"}
 
 

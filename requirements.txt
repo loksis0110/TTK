@@ -3,3 +3,5 @@ uvicorn[standard]
 pydantic
 aiogram>=3.0
 apscheduler>=3.10
+pywebpush>=2.0
+maxapi[fastapi]>=1.2
