@@ -131,6 +131,28 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
 .panel{background:var(--surface);border-radius:20px;padding:22px 24px;box-shadow:var(--shadow);margin:14px 0}
 .info{background:var(--fill);border-radius:14px;padding:12px 16px;font-size:14px;color:var(--sec)}
 
+/* ПОСТЫ (стена позора / фото-отчёты) — единый вид карточки */
+.post-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.post-who{font-weight:600}
+.post-meta{font-size:13px;color:var(--sec);margin-top:2px}
+.post-actions{display:flex;gap:6px;flex-wrap:wrap;flex:none}
+.post-photo{width:100%;max-height:420px;object-fit:cover;border-radius:14px;margin:12px 0;cursor:pointer;display:block;background:var(--fill)}
+.post-caption{margin:0 0 10px;white-space:pre-wrap;word-break:break-word}
+.post-comments{border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
+.post-comment{margin-bottom:8px;font-size:15px;word-break:break-word}
+.post-comment-form{display:flex;gap:8px;margin-top:8px}
+.post-comment-form .field{flex:1}
+.thumb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;margin-top:12px}
+.thumb-grid .thumb{position:relative;border-radius:12px;overflow:hidden;background:var(--fill);cursor:pointer}
+.thumb-grid img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
+.chip{display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:12px;background:var(--fill);font-size:14px;line-height:1.25}
+.chip.done{color:var(--green)}
+.chip.overdue{color:var(--red)}
+.chip.pending{color:var(--sec)}
+.report-day-head{font-size:12px;font-weight:700;margin:22px 0 4px;color:var(--sec);text-transform:uppercase;letter-spacing:.04em}
+.report-person-head{font-weight:600;margin:14px 0 0}
+
 /* CHECKLIST */
 .cl{display:flex;align-items:center;gap:14px;padding:14px 18px;cursor:pointer}
 .cl .ck{width:24px;height:24px;border-radius:50%;border:2px solid var(--sec);flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
@@ -391,13 +413,19 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
         <span class="sp"></span>
         <button class="btn sm" onclick="openMyShifts()">🕓 Мои смены</button>
       </div>
-      <div class="group" id="photo-list"></div>
+      <div id="photo-list"></div>
+
+      <div class="edit-only">
+        <h2 class="h2">Отчёты команды</h2>
+        <p class="muted" style="font-size:13px;margin:-8px 0 0">Фото-отчёты всех смен за последние 3 дня.</p>
+        <div id="team-reports-list"></div>
+      </div>
     </section>
 
     <!-- СТЕНА ПОЗОРА -->
     <section class="view" id="view-shame">
       <div class="hero"><span class="eyebrow">СМЕНА</span><h1>Стена позора</h1><p>Фото и подпись — что именно было сделано не так. Можно отметить виновного — ему придёт уведомление.</p></div>
-      <div class="panel">
+      <div class="panel not-waiter-only">
         <h3>Новая запись</h3>
         <label class="btn block" style="cursor:pointer;text-align:center;margin-top:12px" id="sh-file-label">📷 Выбрать фото (можно несколько)
           <input type="file" accept="image/*" multiple class="hidden" id="sh-file" onchange="shFilePicked(this)">
@@ -423,10 +451,6 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
     <!-- КОМАНДА -->
     <section class="view" id="view-team">
       <div class="hero"><span class="eyebrow">УПРАВЛЕНИЕ</span><h1>Команда</h1><p>Архивы отчётов и стены позора, подтверждение аккаунтов, роли и меню.</p></div>
-
-      <h2 class="h2">Отчёты смен (текущие)</h2>
-      <p class="muted" style="font-size:13px;margin:-8px 0 0">Живой просмотр ещё не заархивированных фото-отчётов — по дням и сотрудникам. Архивация не требуется.</p>
-      <div class="group" id="team-reports-list"></div>
 
       <h2 class="h2">Архивы</h2>
       <p class="muted" style="font-size:13px;margin:-8px 0 0">Каждые 3 дня фото отчётов смены и фото со стены позора упаковываются в отдельные подписанные ZIP-архивы (внутри — папки по категории, дню и сотруднику) и удаляются из общего доступа. Архив хранится до следующей архивации, затем удаляется автоматически.</p>
@@ -946,39 +970,80 @@ let photoShifts=[];
 async function loadPhotos(){
   const r=await run(()=>api('/api/shifts/photos/status'));if(!r)return;
   photoShifts=r;renderPhotos();
+  if(canEdit())loadTeamReports();
+}
+function renderReportCard(photo,ownerName){
+  return `<div class="panel">
+    <div class="post-head">
+      <div>${ownerName?`<div class="post-who">${esc(ownerName)}</div>`:''}
+        <div class="post-meta">${photo.uploaded_at?fmtShameDate(photo.uploaded_at):''}${photo.edited_at?' · изменено':''}</div></div>
+      <div class="post-actions">
+        ${photo.can_edit?`<button class="btn sm" onclick="editReportPhoto(${photo.id})">✏️ Изменить</button><button class="btn sm danger" onclick="deleteReportPhoto(${photo.id})">Удалить</button>`:''}
+      </div>
+    </div>
+    <img class="post-photo" src="/api/shifts/photos/${photo.id}/file?token=${encodeURIComponent(token||'')}" onclick="window.open('/api/shifts/photos/${photo.id}/file?token=${encodeURIComponent(token||'')}','_blank')">
+    ${photo.caption?`<p class="post-caption">${esc(photo.caption)}</p>`:''}
+    ${renderPostComments(photo.comments||[],'rp-c',photo.id,'submitReportComment')}
+  </div>`;
 }
 function renderPhotos(){
   $('photo-list').innerHTML=photoShifts.length?photoShifts.map(s=>{
     const mine=me&&(me.id===s.user_id||isAdmin());
+    const uploadedPosts=[
+      ...s.checkpoints.filter(cp=>cp.uploaded).map(cp=>({id:cp.photo_id,caption:cp.caption,uploaded_at:cp.uploaded_at,edited_at:cp.edited_at,comments:cp.comments,can_edit:cp.can_edit})),
+      ...(s.extra_photos||[])
+    ];
     return `<div class="panel">
       <h3>${esc(s.user_name)} · ${esc(s.start)}–${esc(s.end)}</h3>
-      <div class="group" style="margin-top:10px">
+      <div class="chip-row">
         ${s.checkpoints.map(cp=>`
-          <div class="row">
-            <div>
-              <div class="t">${cp.uploaded?'✅':(cp.overdue?'❗':'⏳')} Фото к ${esc(cp.due_at)}</div>
-              <div class="s">${cp.uploaded?(cp.caption?esc(cp.caption):'Загружено'):(cp.overdue?'Просрочено':'Ожидается')}</div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              ${(!cp.uploaded&&isAdmin())?`<button class="btn sm" onclick="remindPhotoNow(${s.shift_id},'${cp.slot}')">📤 Напомнить сейчас</button>`:''}
-              ${cp.uploaded
-                ?`<img src="/api/shifts/photos/${cp.photo_id}/file?token=${encodeURIComponent(token||'')}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;cursor:pointer" onclick="window.open('/api/shifts/photos/${cp.photo_id}/file?token=${encodeURIComponent(token||'')}','_blank')">`
-                :(mine?`<label class="btn sm primary" style="cursor:pointer">Загрузить<input type="file" accept="image/*" class="hidden" onchange="uploadPhoto(${s.shift_id},'${cp.slot}',this)"></label>`:'')}
-            </div>
+          <div class="chip ${cp.uploaded?'done':(cp.overdue?'overdue':'pending')}">
+            ${cp.uploaded?'✅':(cp.overdue?'❗':'⏳')} к ${esc(cp.due_at)}
+            ${(!cp.uploaded&&isAdmin())?`<button class="btn sm" onclick="remindPhotoNow(${s.shift_id},'${cp.slot}')">📤</button>`:''}
+            ${(!cp.uploaded&&mine)?`<label class="btn sm primary" style="cursor:pointer">Загрузить<input type="file" accept="image/*" class="hidden" onchange="uploadPhoto(${s.shift_id},'${cp.slot}',this)"></label>`:''}
           </div>`).join('')}
-        ${(s.extra_photos||[]).map(ep=>`
-          <div class="row">
-            <div><div class="t">📎 Доп. фото отчёта</div><div class="s">${ep.caption?esc(ep.caption):'Без подписи'}</div></div>
-            <img src="/api/shifts/photos/${ep.id}/file?token=${encodeURIComponent(token||'')}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;cursor:pointer" onclick="window.open('/api/shifts/photos/${ep.id}/file?token=${encodeURIComponent(token||'')}','_blank')">
-          </div>`).join('')}
-        ${mine?`
-          <div class="row" style="flex-direction:column;align-items:stretch;gap:8px">
-            <textarea class="field" id="extra-cap-${s.shift_id}" rows="1" placeholder="Подпись: что было сделано за смену (необязательно)"></textarea>
-            <label class="btn sm" style="cursor:pointer;text-align:center">+ Доп. фото отчёта (можно несколько)<input type="file" accept="image/*" multiple class="hidden" onchange="uploadExtraPhoto(${s.shift_id},this)"></label>
-          </div>`:''}
       </div>
+      ${uploadedPosts.map(p=>renderReportCard(p)).join('')}
+      ${mine?`
+        <div class="panel" style="box-shadow:none;border:1px dashed var(--line);padding:16px">
+          <textarea class="field" id="extra-cap-${s.shift_id}" rows="1" placeholder="Подпись: что было сделано за смену (необязательно)"></textarea>
+          <label class="btn sm" style="cursor:pointer;text-align:center;display:block;margin-top:10px">+ Доп. фото отчёта (можно несколько)<input type="file" accept="image/*" multiple class="hidden" onchange="uploadExtraPhoto(${s.shift_id},this)"></label>
+        </div>`:''}
     </div>`;
   }).join(''):'<div class="row muted">На сегодня фото не требуются</div>';
+}
+async function submitReportComment(id){
+  const inp=$('rp-c-'+id),text=inp.value.trim();if(!text)return;
+  const r=await run(()=>api(`/api/shifts/photos/${id}/comments`,{method:'POST',body:{text}}));
+  if(r){inp.value='';loadPhotos()}
+}
+function findReportPhoto(id){
+  for(const s of photoShifts){
+    for(const cp of s.checkpoints){if(cp.photo_id===id)return cp}
+    for(const ep of (s.extra_photos||[])){if(ep.id===id)return ep}
+  }
+  for(const day of teamReports){for(const p of day.people){const f=p.photos.find(x=>x.id===id);if(f)return f}}
+  return null;
+}
+function editReportPhoto(id){
+  const p=findReportPhoto(id);if(!p)return;
+  $('sheet').innerHTML=`<h2>Изменить подпись</h2>
+    <textarea class="field" id="rp-edit-caption" rows="3" style="margin-top:12px">${esc(p.caption||'')}</textarea>
+    <div class="actions" style="margin-top:14px">
+      <button class="btn" onclick="closeSheet()">Отмена</button>
+      <button class="btn primary" onclick="saveReportEdit(${id})">Сохранить</button>
+    </div>`;
+  $('ov').classList.add('on');
+}
+async function saveReportEdit(id){
+  const caption=$('rp-edit-caption').value.trim();
+  const r=await run(()=>api(`/api/shifts/photos/${id}`,{method:'PUT',body:{caption}}));
+  if(r){closeSheet();toast('Сохранено');loadPhotos();if(canEdit())loadTeamReports()}
+}
+async function deleteReportPhoto(id){
+  if(!confirm('Удалить это фото отчёта?'))return;
+  const r=await run(()=>api(`/api/shifts/photos/${id}`,{method:'DELETE'}));
+  if(r){toast('Удалено');loadPhotos();if(canEdit())loadTeamReports()}
 }
 async function remindPhotoNow(shiftId,slot){
   const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot',slot);
@@ -1060,23 +1125,29 @@ function fmtShameDate(ts){
   const d=new Date(ts*1000);
   return d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
+function renderPostComments(comments,idPrefix,postId,submitFn){
+  return `<div class="post-comments">
+    ${comments.map(c=>`<div class="post-comment"><b>${esc(c.user_name)}:</b> ${esc(c.text)} <span class="muted" style="font-size:12px">· ${fmtShameDate(c.created_at)}</span></div>`).join('')}
+    <div class="post-comment-form">
+      <input class="field" placeholder="Комментарий…" id="${idPrefix}-${postId}" onkeydown="if(event.key==='Enter')${submitFn}(${postId})">
+      <button class="btn sm" onclick="${submitFn}(${postId})">➤</button>
+    </div>
+  </div>`;
+}
 function renderShame(){
   $('shame-list').innerHTML=shameList.length?shameList.map(p=>`
     <div class="panel">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
-        <div><div class="t" style="font-weight:600">${esc(p.user_name)}</div>
-          <div class="s muted">${fmtShameDate(p.created_at)}${p.tagged_user_name?` · отмечен: <b>${esc(p.tagged_user_name)}</b>`:''}</div></div>
-        ${isAdmin()?`<button class="btn sm danger" onclick="deleteShame(${p.id})">Удалить</button>`:''}
-      </div>
-      <img src="/api/shame/${p.id}/file?token=${encodeURIComponent(token||'')}" style="width:100%;max-height:420px;object-fit:cover;border-radius:14px;margin:12px 0;cursor:pointer" onclick="window.open('/api/shame/${p.id}/file?token=${encodeURIComponent(token||'')}','_blank')">
-      ${p.caption?`<p style="margin:0 0 10px">${esc(p.caption)}</p>`:''}
-      <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px">
-        ${p.comments.map(c=>`<div style="margin-bottom:8px;font-size:15px"><b>${esc(c.user_name)}:</b> ${esc(c.text)} <span class="muted" style="font-size:12px">· ${fmtShameDate(c.created_at)}</span></div>`).join('')}
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <input class="field" placeholder="Комментарий…" id="sh-c-${p.id}" style="flex:1" onkeydown="if(event.key==='Enter')submitShameComment(${p.id})">
-          <button class="btn sm" onclick="submitShameComment(${p.id})">➤</button>
+      <div class="post-head">
+        <div><div class="post-who">${esc(p.user_name)}</div>
+          <div class="post-meta">${fmtShameDate(p.created_at)}${p.edited_at?' · изменено':''}${p.tagged_user_name?` · отмечен: <b>${esc(p.tagged_user_name)}</b>`:''}</div></div>
+        <div class="post-actions">
+          ${p.can_edit?`<button class="btn sm" onclick="editShame(${p.id})">✏️ Изменить</button>`:''}
+          ${p.can_delete?`<button class="btn sm danger" onclick="deleteShame(${p.id})">Удалить</button>`:''}
         </div>
       </div>
+      <img class="post-photo" src="/api/shame/${p.id}/file?token=${encodeURIComponent(token||'')}" onclick="window.open('/api/shame/${p.id}/file?token=${encodeURIComponent(token||'')}','_blank')">
+      ${p.caption?`<p class="post-caption">${esc(p.caption)}</p>`:''}
+      ${renderPostComments(p.comments,'sh-c',p.id,'submitShameComment')}
     </div>`).join(''):'<div class="row muted">Пока нет записей</div>';
 }
 function shFilePicked(input){
@@ -1103,6 +1174,23 @@ async function submitShameComment(id){
   const inp=$('sh-c-'+id),text=inp.value.trim();if(!text)return;
   const r=await run(()=>api(`/api/shame/${id}/comments`,{method:'POST',body:{text}}));
   if(r){inp.value='';loadShame()}
+}
+function editShame(id){
+  const p=shameList.find(x=>x.id===id);if(!p)return;
+  const tagOpts='<option value="">Не отмечать никого</option>'+staffList.filter(u=>u.id!==me.id).map(u=>`<option value="${u.id}" ${p.tagged_user_id===u.id?'selected':''}>${esc(u.name)} — ${esc(ROLES[u.role]||'')}</option>`).join('');
+  $('sheet').innerHTML=`<h2>Изменить запись</h2>
+    <textarea class="field" id="sh-edit-caption" rows="3" style="margin-top:12px">${esc(p.caption)}</textarea>
+    <select class="field" id="sh-edit-tag" style="margin-top:12px">${tagOpts}</select>
+    <div class="actions" style="margin-top:14px">
+      <button class="btn" onclick="closeSheet()">Отмена</button>
+      <button class="btn primary" onclick="saveShameEdit(${id})">Сохранить</button>
+    </div>`;
+  $('ov').classList.add('on');
+}
+async function saveShameEdit(id){
+  const caption=$('sh-edit-caption').value.trim(),tagged=$('sh-edit-tag').value;
+  const r=await run(()=>api(`/api/shame/${id}`,{method:'PUT',body:{caption,tagged_user_id:tagged?Number(tagged):null}}));
+  if(r){closeSheet();toast('Сохранено');loadShame()}
 }
 async function deleteShame(id){
   if(!confirm('Удалить запись со стены позора?'))return;
@@ -1255,28 +1343,20 @@ async function refreshPending(){
   $('pending-badge').textContent=n;$('pending-badge').classList.toggle('hidden',!n);
 }
 let teamReports=[];
-function fmtReportDate(ts){
-  const d=new Date(ts*1000);
-  return d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-}
 async function loadTeamReports(){
+  if(!canEdit())return;
   const r=await run(()=>api('/api/team/reports'));if(!r)return;
   teamReports=r;renderTeamReports();
 }
 function renderTeamReports(){
-  $('team-reports-list').innerHTML=teamReports.length?teamReports.map(day=>`
-    <div class="panel">
-      <h3>${esc(ddmmJS(day.day))}</h3>
-      ${day.people.map(p=>`
-        <div style="margin-top:10px">
-          <div class="t" style="font-weight:600">${esc(p.name)}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
-            ${p.photos.map(ph=>`<a href="/api/shifts/photos/${ph.id}/file?token=${encodeURIComponent(token||'')}" target="_blank" title="${esc(ph.caption||ph.slot)}">
-              <img src="/api/shifts/photos/${ph.id}/file?token=${encodeURIComponent(token||'')}" style="width:72px;height:72px;object-fit:cover;border-radius:10px">
-            </a>`).join('')}
-          </div>
-        </div>`).join('')}
-    </div>`).join(''):'<div class="row muted">Пока нет незаархивированных отчётов</div>';
+  const el=$('team-reports-list');if(!el)return;
+  el.innerHTML=teamReports.length?teamReports.map(day=>`
+    <div class="report-day-head">${esc(ddmmJS(day.day))}</div>
+    ${day.people.map(p=>`
+      <div class="report-person-head">${esc(p.name)}</div>
+      ${p.photos.map(ph=>renderReportCard(ph)).join('')}
+    `).join('')}
+  `).join(''):'<div class="row muted">Пока нет отчётов за последние дни</div>';
 }
 let archivesList=[];
 async function loadArchives(){
@@ -1300,7 +1380,6 @@ async function forceArchive(){
   if(r){toast('Архивация выполнена ✅');loadArchives();loadTeamReports();if(tab==='photos')loadPhotos();if(tab==='shame')loadShame()}
 }
 async function loadTeam(){
-  await loadTeamReports();
   await loadArchives();
   if(!isAdmin())return;
   await refreshPending();

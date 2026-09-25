@@ -421,13 +421,27 @@ def init_db():
             c.execute("ALTER TABLE shift_photos ADD COLUMN caption TEXT NOT NULL DEFAULT ''")
         except sqlite3.OperationalError:
             pass
+        try:
+            c.execute("ALTER TABLE shift_photos ADD COLUMN edited_at INTEGER")
+        except sqlite3.OperationalError:
+            pass
+
+        # Комментарии к фото-отчётам смены (как в шаме — автор, текст, время).
+        c.execute("""CREATE TABLE IF NOT EXISTS shift_photo_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, photo_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            text TEXT NOT NULL, created_at INTEGER NOT NULL)""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_shift_photo_comments_photo ON shift_photo_comments(photo_id)")
 
         # Стена позора: посты (фото + подпись + отметка) и комментарии к ним.
         c.execute("""CREATE TABLE IF NOT EXISTS shame_posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, day TEXT NOT NULL,
             caption TEXT NOT NULL DEFAULT '', file_path TEXT NOT NULL, tagged_user_id INTEGER,
-            created_at INTEGER NOT NULL)""")
+            created_at INTEGER NOT NULL, edited_at INTEGER)""")
         c.execute("CREATE INDEX IF NOT EXISTS idx_shame_posts_day ON shame_posts(day)")
+        try:
+            c.execute("ALTER TABLE shame_posts ADD COLUMN edited_at INTEGER")
+        except sqlite3.OperationalError:
+            pass
         c.execute("""CREATE TABLE IF NOT EXISTS shame_comments (
             id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
             text TEXT NOT NULL, created_at INTEGER NOT NULL)""")
@@ -1190,8 +1204,21 @@ def photo_checkpoints_for_shift(s: dict) -> list:
     return out
 
 
+REPORT_DISPLAY_DAYS = 3   # отчёты смены видны команде N дней (столько же, сколько до архивации)
+
+
 def photo_dict(r) -> dict:
     return {"id": r["id"], "shift_id": r["shift_id"], "slot": r["slot"], "uploaded_at": r["uploaded_at"]}
+
+
+def photo_comments(c, photo_id: int, umap: dict) -> list:
+    rows = c.execute("SELECT * FROM shift_photo_comments WHERE photo_id=? ORDER BY created_at", (photo_id,)).fetchall()
+    return [{"id": cm["id"], "user_id": cm["user_id"], "user_name": umap.get(cm["user_id"], "Удалён"),
+             "text": cm["text"], "created_at": cm["created_at"]} for cm in rows]
+
+
+def report_can_edit(viewer: dict, owner_id: int) -> bool:
+    return viewer["id"] == owner_id or viewer["role"] in ADMIN_ROLES
 
 
 @app.get("/api/shifts/photos/status")
@@ -1200,9 +1227,10 @@ async def photo_status(day: Optional[str] = None, user: dict = Depends(current_u
     parse_day(target)
     prev_day = (parse_day(target) - timedelta(days=1)).strftime("%Y-%m-%d")
     now = datetime.now(MSK)
-    admin = user["role"] in ADMIN_ROLES
+    admin = user["role"] in TEAM_ROLES
     with db() as c:
         rows = c.execute(SHIFT_SQL + " WHERE s.day IN (?,?) ORDER BY s.start_time", (target, prev_day)).fetchall()
+        umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
         result = []
         for r in rows:
             s = shift_dict(r)
@@ -1218,14 +1246,20 @@ async def photo_status(day: Optional[str] = None, user: dict = Depends(current_u
                 checkpoints.append({
                     "slot": cp["slot"], "due_at": cp["due_dt"].strftime("%H:%M"),
                     "uploaded": bool(p), "photo_id": p["id"] if p else None,
+                    "uploaded_at": p["uploaded_at"] if p else None,
+                    "edited_at": p["edited_at"] if p else None,
                     "caption": (p["caption"] if p else "") or "",
                     "overdue": (not p) and now > cp["due_dt"],
+                    "comments": photo_comments(c, p["id"], umap) if p else [],
+                    "can_edit": report_can_edit(user, s["user_id"]) if p else False,
                 })
             extra = c.execute("SELECT * FROM shift_photos WHERE shift_id=? AND slot LIKE 'extra_%' ORDER BY uploaded_at",
                               (s["id"],)).fetchall()
             result.append({"shift_id": s["id"], "user_id": s["user_id"], "user_name": s["user_name"],
                             "start": s["start"], "end": s["end"], "checkpoints": checkpoints,
-                            "extra_photos": [{"id": p["id"], "caption": p["caption"] or "", "uploaded_at": p["uploaded_at"]} for p in extra]})
+                            "extra_photos": [{"id": p["id"], "caption": p["caption"] or "", "uploaded_at": p["uploaded_at"],
+                                               "comments": photo_comments(c, p["id"], umap),
+                                               "can_edit": report_can_edit(user, s["user_id"])} for p in extra]})
     return result
 
 
@@ -1246,6 +1280,61 @@ async def my_shift_photos(days: int = 14, user: dict = Depends(current_user)):
                                (s["id"],)).fetchall()
             result.append({**s, "photos": [dict(p) for p in photos]})
     return result
+
+
+class PhotoCommentIn(BaseModel):
+    text: str
+
+
+@app.post("/api/shifts/photos/{photo_id}/comments")
+async def add_photo_comment(photo_id: int, body: PhotoCommentIn, user: dict = Depends(current_user)):
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(400, "Пустой комментарий")
+    with db() as c:
+        p = c.execute("SELECT * FROM shift_photos WHERE id=?", (photo_id,)).fetchone()
+        if not p:
+            raise HTTPException(404, "Фото не найдено")
+        c.execute("INSERT INTO shift_photo_comments (photo_id, user_id, text, created_at) VALUES (?,?,?,?)",
+                  (photo_id, user["id"], text[:1000], int(time.time())))
+    if p["user_id"] and p["user_id"] != user["id"]:
+        send_push([p["user_id"]], "Новый комментарий", f"{user['name']}: {text[:120]}", "/#photos")
+    return {"status": "success"}
+
+
+class PhotoEditIn(BaseModel):
+    caption: str = ""
+
+
+@app.put("/api/shifts/photos/{photo_id}")
+async def edit_shift_photo(photo_id: int, body: PhotoEditIn, user: dict = Depends(current_user)):
+    with db() as c:
+        p = c.execute("SELECT * FROM shift_photos WHERE id=?", (photo_id,)).fetchone()
+        if not p:
+            raise HTTPException(404, "Фото не найдено")
+        if not report_can_edit(user, p["user_id"]):
+            raise HTTPException(403, "Можно изменять только свой отчёт")
+        c.execute("UPDATE shift_photos SET caption=?, edited_at=? WHERE id=?",
+                  (body.caption.strip()[:1000], int(time.time()), photo_id))
+    return {"status": "success"}
+
+
+@app.delete("/api/shifts/photos/{photo_id}")
+async def delete_shift_photo(photo_id: int, user: dict = Depends(current_user)):
+    with db() as c:
+        p = c.execute("SELECT * FROM shift_photos WHERE id=?", (photo_id,)).fetchone()
+        if not p:
+            raise HTTPException(404, "Фото не найдено")
+        if not report_can_edit(user, p["user_id"]):
+            raise HTTPException(403, "Можно удалять только свой отчёт")
+        try:
+            if os.path.exists(p["file_path"]):
+                os.remove(p["file_path"])
+        except OSError:
+            pass
+        c.execute("DELETE FROM shift_photo_comments WHERE photo_id=?", (photo_id,))
+        c.execute("DELETE FROM shift_photos WHERE id=?", (photo_id,))
+    return {"status": "success"}
 
 
 @app.post("/api/shifts/photos")
@@ -1354,13 +1443,16 @@ class ShameCommentIn(BaseModel):
     text: str
 
 
-def shame_post_dict(c, r, umap: dict) -> dict:
+def shame_post_dict(c, r, umap: dict, viewer: dict) -> dict:
     comments = c.execute("SELECT * FROM shame_comments WHERE post_id=? ORDER BY created_at", (r["id"],)).fetchall()
+    can_edit = viewer["id"] == r["user_id"] or viewer["role"] in ADMIN_ROLES
     return {
         "id": r["id"], "day": r["day"], "caption": r["caption"] or "", "created_at": r["created_at"],
+        "edited_at": r["edited_at"] if "edited_at" in r.keys() else None,
         "user_id": r["user_id"], "user_name": umap.get(r["user_id"], "Удалён"),
         "tagged_user_id": r["tagged_user_id"],
         "tagged_user_name": umap.get(r["tagged_user_id"]) if r["tagged_user_id"] else None,
+        "can_edit": can_edit, "can_delete": can_edit,
         "comments": [{"id": cm["id"], "user_id": cm["user_id"], "user_name": umap.get(cm["user_id"], "Удалён"),
                       "text": cm["text"], "created_at": cm["created_at"]} for cm in comments],
     }
@@ -1372,12 +1464,12 @@ async def list_shame(limit: int = 60, user: dict = Depends(current_user)):
     with db() as c:
         rows = c.execute("SELECT * FROM shame_posts ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
         umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
-        return [shame_post_dict(c, r, umap) for r in rows]
+        return [shame_post_dict(c, r, umap, user) for r in rows]
 
 
 @app.post("/api/shame")
 async def create_shame(caption: str = Form(""), tagged_user_id: Optional[int] = Form(None),
-                        files: List[UploadFile] = File(...), user: dict = Depends(current_user)):
+                        files: List[UploadFile] = File(...), user: dict = Depends(require_not_waiter)):
     good_files = [f for f in files if is_image_upload(f)]
     if not good_files:
         raise HTTPException(400, "Нужно загрузить изображение")
@@ -1439,12 +1531,35 @@ async def add_shame_comment(post_id: int, body: ShameCommentIn, user: dict = Dep
     return {"status": "success"}
 
 
-@app.delete("/api/shame/{post_id}")
-async def delete_shame_post(post_id: int, admin: dict = Depends(require_admin)):
+class ShamePostEditIn(BaseModel):
+    caption: str = ""
+    tagged_user_id: Optional[int] = None
+
+
+@app.put("/api/shame/{post_id}")
+async def edit_shame_post(post_id: int, body: ShamePostEditIn, user: dict = Depends(current_user)):
     with db() as c:
         r = c.execute("SELECT * FROM shame_posts WHERE id=?", (post_id,)).fetchone()
         if not r:
             raise HTTPException(404, "Запись не найдена")
+        if r["user_id"] != user["id"] and user["role"] not in ADMIN_ROLES:
+            raise HTTPException(403, "Можно изменять только свою запись")
+        if body.tagged_user_id and not c.execute(
+                "SELECT 1 FROM users WHERE id=? AND status='approved'", (body.tagged_user_id,)).fetchone():
+            raise HTTPException(400, "Отмеченный пользователь не найден")
+        c.execute("UPDATE shame_posts SET caption=?, tagged_user_id=?, edited_at=? WHERE id=?",
+                  (body.caption.strip()[:1000], body.tagged_user_id, int(time.time()), post_id))
+    return {"status": "success"}
+
+
+@app.delete("/api/shame/{post_id}")
+async def delete_shame_post(post_id: int, user: dict = Depends(current_user)):
+    with db() as c:
+        r = c.execute("SELECT * FROM shame_posts WHERE id=?", (post_id,)).fetchone()
+        if not r:
+            raise HTTPException(404, "Запись не найдена")
+        if r["user_id"] != user["id"] and user["role"] not in ADMIN_ROLES:
+            raise HTTPException(403, "Можно удалять только свою запись")
         try:
             if os.path.exists(r["file_path"]):
                 os.remove(r["file_path"])
@@ -1594,22 +1709,26 @@ async def list_archives(actor: dict = Depends(require_team)):
 
 @app.get("/api/team/reports")
 async def team_reports(actor: dict = Depends(require_team)):
-    """Живой просмотр ещё не заархивированных фото-отчётов смен — доступно старшему бармену,
-    бар-менеджеру и мастеру без необходимости запускать архивацию (которая упаковала бы сразу
-    все категории, включая стену позора, и удалила бы оригиналы)."""
+    """Отчёты смены (фото) за последние REPORT_DISPLAY_DAYS дней — показываются прямо во вкладке
+    «Фото» старшему бармену, бар-менеджеру и мастеру, без отдельной архивации."""
+    start = (datetime.now(MSK) - timedelta(days=REPORT_DISPLAY_DAYS - 1)).strftime("%Y-%m-%d")
     with db() as c:
-        rows = c.execute("""SELECT sp.id, sp.shift_id, sp.day, sp.slot, sp.caption, sp.uploaded_at, sp.user_id,
+        rows = c.execute("""SELECT sp.id, sp.shift_id, sp.day, sp.slot, sp.caption, sp.uploaded_at, sp.edited_at, sp.user_id,
                                     COALESCE(u.name, 'Сотрудник') AS who
                              FROM shift_photos sp LEFT JOIN users u ON u.id = sp.user_id
-                             ORDER BY sp.day DESC, sp.uploaded_at DESC""").fetchall()
-    days: dict = {}
-    for r in rows:
-        day_bucket = days.setdefault(r["day"], {})
-        person_bucket = day_bucket.setdefault(r["who"], [])
-        person_bucket.append({
-            "id": r["id"], "shift_id": r["shift_id"], "slot": r["slot"],
-            "caption": r["caption"] or "", "uploaded_at": r["uploaded_at"], "user_id": r["user_id"],
-        })
+                             WHERE sp.day >= ?
+                             ORDER BY sp.day DESC, sp.uploaded_at DESC""", (start,)).fetchall()
+        umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
+        days: dict = {}
+        for r in rows:
+            day_bucket = days.setdefault(r["day"], {})
+            person_bucket = day_bucket.setdefault(r["who"], [])
+            person_bucket.append({
+                "id": r["id"], "shift_id": r["shift_id"], "slot": r["slot"],
+                "caption": r["caption"] or "", "uploaded_at": r["uploaded_at"], "edited_at": r["edited_at"],
+                "user_id": r["user_id"], "comments": photo_comments(c, r["id"], umap),
+                "can_edit": report_can_edit(actor, r["user_id"]),
+            })
     return [{"day": day, "people": [{"name": name, "photos": photos} for name, photos in people.items()]}
             for day, people in sorted(days.items(), reverse=True)]
 
