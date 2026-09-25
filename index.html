@@ -145,6 +145,7 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
 .thumb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;margin-top:12px}
 .thumb-grid .thumb{position:relative;border-radius:12px;overflow:hidden;background:var(--fill);cursor:pointer}
 .thumb-grid img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.thumb-grid .thumb-x{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(0,0,0,.62);color:#fff;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 .chip-row{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
 .chip{display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:12px;background:var(--fill);font-size:14px;line-height:1.25}
 .chip.done{color:var(--green)}
@@ -427,12 +428,8 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
       <div class="hero"><span class="eyebrow">СМЕНА</span><h1>Стена позора</h1><p>Фото и подпись — что именно было сделано не так. Можно отметить виновного — ему придёт уведомление.</p></div>
       <div class="panel not-waiter-only">
         <h3>Новая запись</h3>
-        <label class="btn block" style="cursor:pointer;text-align:center;margin-top:12px" id="sh-file-label">📷 Выбрать фото (можно несколько)
-          <input type="file" accept="image/*" multiple class="hidden" id="sh-file" onchange="shFilePicked(this)">
-        </label>
-        <textarea class="field" id="sh-caption" rows="2" placeholder="Что было сделано не так?" style="margin-top:12px"></textarea>
-        <select class="field" id="sh-tag" style="margin-top:12px"><option value="">Не отмечать никого</option></select>
-        <button class="btn primary block" id="sh-submit-btn" style="margin-top:14px" onclick="submitShame()">Опубликовать</button>
+        <p class="muted" style="font-size:14px;margin:6px 0 0">Выберите одно или несколько фото, добавьте подпись и при желании отметьте сотрудника.</p>
+        <button class="btn primary block" style="margin-top:14px" onclick="newShame()">📷 Новая запись</button>
       </div>
       <div id="shame-list"></div>
     </section>
@@ -796,7 +793,7 @@ function openShift(id,date){
     <div class="actions" style="margin-top:8px"><button class="btn" onclick="closeSheet()">Отмена</button></div>`;
   $('ov').classList.add('on');
 }
-function closeSheet(){$('ov').classList.remove('on');$('sheet').classList.remove('wide')}
+function closeSheet(){closeComposer();commentsPostId=null;$('ov').classList.remove('on');$('sheet').classList.remove('wide')}
 async function saveShift(id){
   const body={user_id:+$('sf-user').value,date:$('sf-date').value,start:$('sf-start').value,end:$('sf-end').value,note:$('sf-note').value};
   if(!body.user_id||!body.date)return toast('Выберите сотрудника и дату');
@@ -965,34 +962,116 @@ async function clSaveNote(){
   if(r){closeSheet();toast('Сохранено');loadChecklist()}
 }
 
-/* ---------- ФОТО СМЕНЫ ---------- */
+/* ---------- КОМПОУЗЕР ФОТО (общий для отчётов смены и стены позора) ----------
+   Выбор нескольких фото → превью-сетка с крестиками → подпись (и адресат) → явная кнопка отправки.
+   Используется в 4 местах: создание/редактирование отчёта, создание/редактирование поста. */
+const MAX_PHOTOS=10;
+let cmp=null;
+function openComposer(o){
+  closeComposer();
+  cmp={...o,items:(o.existing||[]).map(p=>({kind:'old',id:p.id,url:p.url})),busy:false};
+  $('sheet').innerHTML=`<h2>${esc(o.title)}</h2>
+    <div class="thumb-grid" id="cmp-grid"></div>
+    <label class="btn block" style="cursor:pointer;text-align:center;margin-top:12px;display:block">📷 Добавить фото
+      <input type="file" accept="image/*" multiple class="hidden" onchange="composerAdd(this)">
+    </label>
+    <div class="muted" id="cmp-count" style="font-size:13px;margin-top:8px"></div>
+    <textarea class="field" id="cmp-caption" rows="3" placeholder="${esc(o.placeholder||'Подпись')}" style="margin-top:12px">${esc(o.caption||'')}</textarea>
+    ${o.tagOptions!==undefined?`<select class="field" id="cmp-tag" style="margin-top:12px">${o.tagOptions}</select>`:''}
+    <div class="actions" style="margin-top:14px">
+      <button class="btn" onclick="closeSheet()">Отмена</button>
+      <button class="btn primary" id="cmp-submit" onclick="composerSubmit()">${esc(o.submitLabel)}</button>
+    </div>`;
+  composerRender();
+  $('ov').classList.add('on');
+}
+function composerRender(){
+  if(!cmp)return;
+  $('cmp-grid').innerHTML=cmp.items.map((it,i)=>`<div class="thumb"><img src="${it.url}" alt=""><button type="button" class="thumb-x" title="Убрать фото" onclick="composerRemove(${i})">✕</button></div>`).join('');
+  const n=cmp.items.length;
+  $('cmp-count').textContent=n?`Фото: ${n} из ${MAX_PHOTOS}`:'Выберите хотя бы одно фото';
+  $('cmp-submit').disabled=!n||cmp.busy;
+}
+function composerAdd(input){
+  if(!cmp)return;
+  const files=Array.from(input.files||[]).filter(f=>f.type.startsWith('image/')||/\.(jpe?g|png|webp|heic|heif|gif)$/i.test(f.name));
+  input.value='';
+  const free=MAX_PHOTOS-cmp.items.length;
+  if(files.length>free)toast(`Можно не больше ${MAX_PHOTOS} фото`);
+  files.slice(0,Math.max(free,0)).forEach(f=>cmp.items.push({kind:'new',file:f,url:URL.createObjectURL(f)}));
+  composerRender();
+}
+function composerRemove(i){
+  if(!cmp||cmp.busy)return;
+  const [it]=cmp.items.splice(i,1);
+  if(it&&it.kind==='new')URL.revokeObjectURL(it.url);
+  composerRender();
+}
+function closeComposer(){
+  if(!cmp)return;
+  cmp.items.forEach(it=>{if(it.kind==='new')URL.revokeObjectURL(it.url)});
+  cmp=null;
+}
+async function composerSubmit(){
+  if(!cmp||cmp.busy)return;
+  if(!cmp.items.length)return toast('Добавьте хотя бы одно фото');
+  const fd=new FormData();
+  fd.append('caption',$('cmp-caption').value.trim());
+  const tag=$('cmp-tag');if(tag&&tag.value)fd.append('tagged_user_id',tag.value);
+  Object.entries(cmp.extra||{}).forEach(([k,v])=>fd.append(k,v));
+  fd.append('keep_photo_ids',cmp.items.filter(it=>it.kind==='old').map(it=>it.id).join(','));
+  cmp.items.filter(it=>it.kind==='new').forEach(it=>fd.append('files',it.file));
+  const c=cmp,btn=$('cmp-submit'),label=btn.textContent;
+  c.busy=true;btn.disabled=true;btn.textContent='Отправка…';
+  try{
+    await apiForm(c.path,c.method,fd);
+    closeSheet();toast(c.doneMsg||'Готово ✅');c.onDone&&c.onDone();
+  }catch(e){
+    toast(e.message||'Ошибка загрузки');
+    if(cmp===c){c.busy=false;btn.textContent=label;composerRender()}
+  }
+}
+async function apiForm(path,method,fd){
+  if(!navigator.onLine)throw new Error('Нет соединения — фото отправятся, когда появится сеть. Попробуйте ещё раз позже.');
+  let r;
+  try{r=await fetch(path,{method,headers:token?{Authorization:'Bearer '+token}:{},body:fd})}
+  catch(e){throw new Error('Нет соединения с сервером')}
+  let data=null;try{data=await r.json()}catch(e){}
+  if(r.status===401&&token){localLogout();throw new Error('Сессия истекла')}
+  if(!r.ok)throw new Error(typeof data?.detail==='string'?data.detail:'Ошибка загрузки');
+  return data;
+}
+function photoGrid(photos,urlFn){
+  return `<div class="thumb-grid">${(photos||[]).map(p=>{const u=urlFn(p.id);return `<div class="thumb" onclick="window.open('${u}','_blank')"><img src="${u}" loading="lazy" alt=""></div>`}).join('')}</div>`;
+}
+
+/* ---------- ФОТО СМЕНЫ (ОТЧЁТЫ) ---------- */
 let photoShifts=[];
 async function loadPhotos(){
   const r=await run(()=>api('/api/shifts/photos/status'));if(!r)return;
   photoShifts=r;renderPhotos();
   if(canEdit())loadTeamReports();
 }
-function renderReportCard(photo,ownerName){
+function reloadReports(){loadPhotos()}
+const reportPhotoUrl=(rid,pid)=>`/api/shifts/reports/${rid}/photos/${pid}/file?token=${encodeURIComponent(token||'')}`;
+function reportSlotLabel(slot){return String(slot||'').startsWith('extra_')?'Доп. отчёт':`Отчёт к ${slot}`}
+function renderReportCard(rep,ownerName){
   return `<div class="panel">
     <div class="post-head">
-      <div>${ownerName?`<div class="post-who">${esc(ownerName)}</div>`:''}
-        <div class="post-meta">${photo.uploaded_at?fmtShameDate(photo.uploaded_at):''}${photo.edited_at?' · изменено':''}</div></div>
+      <div>${ownerName?`<div class="post-who">${esc(ownerName)}</div>`:`<div class="post-who">${esc(reportSlotLabel(rep.slot))}</div>`}
+        <div class="post-meta">${ownerName?esc(reportSlotLabel(rep.slot))+' · ':''}${rep.uploaded_at?fmtShameDate(rep.uploaded_at):''}${rep.edited_at?' · изменено':''} · фото: ${(rep.photos||[]).length}</div></div>
       <div class="post-actions">
-        ${photo.can_edit?`<button class="btn sm" onclick="editReportPhoto(${photo.id})">✏️ Изменить</button><button class="btn sm danger" onclick="deleteReportPhoto(${photo.id})">Удалить</button>`:''}
+        ${rep.can_edit?`<button class="btn sm" onclick="editReport(${rep.id})">✏️ Изменить</button><button class="btn sm danger" onclick="deleteReport(${rep.id})">Удалить</button>`:''}
       </div>
     </div>
-    <img class="post-photo" src="/api/shifts/photos/${photo.id}/file?token=${encodeURIComponent(token||'')}" onclick="window.open('/api/shifts/photos/${photo.id}/file?token=${encodeURIComponent(token||'')}','_blank')">
-    ${photo.caption?`<p class="post-caption">${esc(photo.caption)}</p>`:''}
-    ${renderPostComments(photo.comments||[],'rp-c',photo.id,'submitReportComment')}
+    ${photoGrid(rep.photos,pid=>reportPhotoUrl(rep.id,pid))}
+    ${rep.caption?`<p class="post-caption" style="margin-top:12px">${esc(rep.caption)}</p>`:''}
   </div>`;
 }
 function renderPhotos(){
   $('photo-list').innerHTML=photoShifts.length?photoShifts.map(s=>{
-    const mine=me&&(me.id===s.user_id||isAdmin());
-    const uploadedPosts=[
-      ...s.checkpoints.filter(cp=>cp.uploaded).map(cp=>({id:cp.photo_id,caption:cp.caption,uploaded_at:cp.uploaded_at,edited_at:cp.edited_at,comments:cp.comments,can_edit:cp.can_edit})),
-      ...(s.extra_photos||[])
-    ];
+    const mine=me&&me.id===s.user_id;
+    const reports=[...s.checkpoints.filter(cp=>cp.report).map(cp=>cp.report),...(s.extra_reports||[])];
     return `<div class="panel">
       <h3>${esc(s.user_name)} · ${esc(s.start)}–${esc(s.end)}</h3>
       <div class="chip-row">
@@ -1000,82 +1079,47 @@ function renderPhotos(){
           <div class="chip ${cp.uploaded?'done':(cp.overdue?'overdue':'pending')}">
             ${cp.uploaded?'✅':(cp.overdue?'❗':'⏳')} к ${esc(cp.due_at)}
             ${(!cp.uploaded&&isAdmin())?`<button class="btn sm" onclick="remindPhotoNow(${s.shift_id},'${cp.slot}')">📤</button>`:''}
-            ${(!cp.uploaded&&mine)?`<label class="btn sm primary" style="cursor:pointer">Загрузить<input type="file" accept="image/*" class="hidden" onchange="uploadPhoto(${s.shift_id},'${cp.slot}',this)"></label>`:''}
+            ${(!cp.uploaded&&mine)?`<button class="btn sm primary" onclick="newReport(${s.shift_id},'${cp.slot}')">Загрузить отчёт</button>`:''}
           </div>`).join('')}
       </div>
-      ${uploadedPosts.map(p=>renderReportCard(p)).join('')}
-      ${mine?`
-        <div class="panel" style="box-shadow:none;border:1px dashed var(--line);padding:16px">
-          <textarea class="field" id="extra-cap-${s.shift_id}" rows="1" placeholder="Подпись: что было сделано за смену (необязательно)"></textarea>
-          <label class="btn sm" style="cursor:pointer;text-align:center;display:block;margin-top:10px">+ Доп. фото отчёта (можно несколько)<input type="file" accept="image/*" multiple class="hidden" onchange="uploadExtraPhoto(${s.shift_id},this)"></label>
-        </div>`:''}
+      ${reports.map(r=>renderReportCard(r)).join('')}
+      ${mine?`<button class="btn sm block" style="margin-top:12px" onclick="newReport(${s.shift_id},'extra')">+ Доп. фото отчёта</button>`:''}
     </div>`;
   }).join(''):'<div class="row muted">На сегодня фото не требуются</div>';
 }
-async function submitReportComment(id){
-  const inp=$('rp-c-'+id),text=inp.value.trim();if(!text)return;
-  const r=await run(()=>api(`/api/shifts/photos/${id}/comments`,{method:'POST',body:{text}}));
-  if(r){inp.value='';loadPhotos()}
-}
-function findReportPhoto(id){
+function findReport(id){
   for(const s of photoShifts){
-    for(const cp of s.checkpoints){if(cp.photo_id===id)return cp}
-    for(const ep of (s.extra_photos||[])){if(ep.id===id)return ep}
+    for(const cp of s.checkpoints){if(cp.report&&cp.report.id===id)return cp.report}
+    for(const r of (s.extra_reports||[])){if(r.id===id)return r}
   }
   for(const day of teamReports){for(const p of day.people){const f=p.photos.find(x=>x.id===id);if(f)return f}}
   return null;
 }
-function editReportPhoto(id){
-  const p=findReportPhoto(id);if(!p)return;
-  $('sheet').innerHTML=`<h2>Изменить подпись</h2>
-    <textarea class="field" id="rp-edit-caption" rows="3" style="margin-top:12px">${esc(p.caption||'')}</textarea>
-    <div class="actions" style="margin-top:14px">
-      <button class="btn" onclick="closeSheet()">Отмена</button>
-      <button class="btn primary" onclick="saveReportEdit(${id})">Сохранить</button>
-    </div>`;
-  $('ov').classList.add('on');
+function newReport(shiftId,slot){
+  openComposer({
+    title:slot==='extra'?'Доп. отчёт':`Отчёт к ${slot}`,submitLabel:'Отправить отчёт',
+    placeholder:'Подпись: что было сделано (необязательно)',
+    path:'/api/shifts/reports',method:'POST',doneMsg:'Отчёт отправлен ✅',onDone:reloadReports,
+    extra:{shift_id:shiftId,slot}
+  });
 }
-async function saveReportEdit(id){
-  const caption=$('rp-edit-caption').value.trim();
-  const r=await run(()=>api(`/api/shifts/photos/${id}`,{method:'PUT',body:{caption}}));
-  if(r){closeSheet();toast('Сохранено');loadPhotos();if(canEdit())loadTeamReports()}
+function editReport(id){
+  const rep=findReport(id);if(!rep)return;
+  openComposer({
+    title:'Изменить отчёт',submitLabel:'Сохранить',placeholder:'Подпись: что было сделано (необязательно)',
+    caption:rep.caption,existing:(rep.photos||[]).map(p=>({id:p.id,url:reportPhotoUrl(id,p.id)})),
+    path:`/api/shifts/reports/${id}`,method:'PUT',doneMsg:'Сохранено',onDone:reloadReports
+  });
 }
-async function deleteReportPhoto(id){
-  if(!confirm('Удалить это фото отчёта?'))return;
-  const r=await run(()=>api(`/api/shifts/photos/${id}`,{method:'DELETE'}));
-  if(r){toast('Удалено');loadPhotos();if(canEdit())loadTeamReports()}
+async function deleteReport(id){
+  if(!confirm('Удалить отчёт целиком вместе со всеми фото?'))return;
+  const r=await run(()=>api(`/api/shifts/reports/${id}`,{method:'DELETE'}));
+  if(r&&!r.queued){toast('Удалено');reloadReports()}
 }
 async function remindPhotoNow(shiftId,slot){
   const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot',slot);
-  try{
-    const r=await fetch('/api/shifts/photos/remind_now',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
-    let data=null;try{data=await r.json()}catch(e){}
-    if(!r.ok)throw new Error(data?.detail||'Ошибка отправки');
-    toast('Напоминание отправлено 📤');
-  }catch(e){toast(e.message||'Ошибка отправки')}
-}
-async function uploadPhoto(shiftId,slot,input){
-  const files=Array.from(input.files||[]);if(!files.length)return;
-  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot',slot);files.forEach(f=>fd.append('files',f));
-  try{
-    const r=await fetch('/api/shifts/photos',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
-    let data=null;try{data=await r.json()}catch(e){}
-    if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
-    toast('Фото загружено ✅');loadPhotos();
-  }catch(e){toast(e.message||'Ошибка загрузки')}
-  input.value='';
-}
-async function uploadExtraPhoto(shiftId,input){
-  const files=Array.from(input.files||[]);if(!files.length)return;
-  const capEl=$('extra-cap-'+shiftId),caption=capEl?capEl.value.trim():'';
-  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot','extra');fd.append('caption',caption);files.forEach(f=>fd.append('files',f));
-  try{
-    const r=await fetch('/api/shifts/photos',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
-    let data=null;try{data=await r.json()}catch(e){}
-    if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
-    toast(files.length>1?'Фото добавлены ✅':'Фото добавлено ✅');if(capEl)capEl.value='';loadPhotos();
-  }catch(e){toast(e.message||'Ошибка загрузки')}
-  input.value='';
+  try{await apiForm('/api/shifts/photos/remind_now','POST',fd);toast('Напоминание отправлено 📤')}
+  catch(e){toast(e.message||'Ошибка отправки')}
 }
 function ddmmJS(d){const[,m,dd]=d.split('-');return `${dd}.${m}`}
 async function openMyShifts(){
@@ -1085,39 +1129,23 @@ async function openMyShifts(){
     $('ov').classList.add('on');return;
   }
   $('sheet').innerHTML=`<h2>Мои смены за 14 дней</h2>
-    <p class="muted" style="font-size:13px;margin:6px 0 0">Выберите смену и добавьте фото с подписью, если забыли отчитаться вовремя.</p>
+    <p class="muted" style="font-size:13px;margin:6px 0 0">Выберите смену и добавьте отчёт, если забыли отчитаться вовремя.</p>
     <div class="group" style="margin-top:12px">
     ${r.map(s=>`<div class="row" style="flex-direction:column;align-items:stretch;gap:8px">
       <div class="t">${esc(ddmmJS(s.date))} · ${esc(s.start)}–${esc(s.end)}</div>
-      <div class="s">Уже загружено фото: ${s.photos.length}</div>
-      <textarea class="field" placeholder="Подпись: что было сделано за смену" id="my-cap-${s.id}" rows="1"></textarea>
-      <label class="btn sm primary" style="cursor:pointer;text-align:center">+ Загрузить фото (можно несколько)<input type="file" accept="image/*" multiple class="hidden" onchange="uploadMyShiftPhoto(${s.id},this)"></label>
+      <div class="s">Уже загружено фото: ${s.photo_count}</div>
+      <button class="btn sm primary" onclick="newReport(${s.id},'extra')">+ Добавить отчёт</button>
     </div>`).join('')}
     </div>
     <div class="actions"><button class="btn" onclick="closeSheet()">Готово</button></div>`;
   $('ov').classList.add('on');
 }
-async function uploadMyShiftPhoto(shiftId,input){
-  const files=Array.from(input.files||[]);if(!files.length)return;
-  const capEl=$('my-cap-'+shiftId),caption=capEl?capEl.value.trim():'';
-  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot','extra');fd.append('caption',caption);files.forEach(f=>fd.append('files',f));
-  try{
-    const r=await fetch('/api/shifts/photos',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
-    let data=null;try{data=await r.json()}catch(e){}
-    if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
-    toast(files.length>1?'Фото добавлены ✅':'Фото добавлено ✅');closeSheet();loadPhotos();
-  }catch(e){toast(e.message||'Ошибка загрузки')}
-  input.value='';
-}
 
 /* ---------- СТЕНА ПОЗОРА ---------- */
 let shameList=[];
+async function ensureStaff(){if(!staffList.length){try{staffList=await api('/api/staff')}catch(e){}}}
 async function loadShame(){
-  if(!staffList.length){try{staffList=await api('/api/staff')}catch(e){}}
-  const sel=$('sh-tag');
-  if(sel&&sel.options.length<=1){
-    sel.innerHTML='<option value="">Не отмечать никого</option>'+staffList.filter(u=>u.id!==me.id).map(u=>`<option value="${u.id}">${esc(u.name)} — ${esc(ROLES[u.role]||'')}</option>`).join('');
-  }
+  await ensureStaff();
   const r=await run(()=>api('/api/shame'));if(!r)return;
   shameList=r;renderShame();
 }
@@ -1125,14 +1153,9 @@ function fmtShameDate(ts){
   const d=new Date(ts*1000);
   return d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
-function renderPostComments(comments,idPrefix,postId,submitFn){
-  return `<div class="post-comments">
-    ${comments.map(c=>`<div class="post-comment"><b>${esc(c.user_name)}:</b> ${esc(c.text)} <span class="muted" style="font-size:12px">· ${fmtShameDate(c.created_at)}</span></div>`).join('')}
-    <div class="post-comment-form">
-      <input class="field" placeholder="Комментарий…" id="${idPrefix}-${postId}" onkeydown="if(event.key==='Enter')${submitFn}(${postId})">
-      <button class="btn sm" onclick="${submitFn}(${postId})">➤</button>
-    </div>
-  </div>`;
+const shamePhotoUrl=(postId,pid)=>`/api/shame/${postId}/photos/${pid}/file?token=${encodeURIComponent(token||'')}`;
+function shameTagOptions(selected){
+  return '<option value="">Не отмечать никого</option>'+staffList.filter(u=>u.id!==me.id).map(u=>`<option value="${u.id}" ${selected===u.id?'selected':''}>${esc(u.name)} — ${esc(ROLES[u.role]||'')}</option>`).join('');
 }
 function renderShame(){
   $('shame-list').innerHTML=shameList.length?shameList.map(p=>`
@@ -1145,57 +1168,59 @@ function renderShame(){
           ${p.can_delete?`<button class="btn sm danger" onclick="deleteShame(${p.id})">Удалить</button>`:''}
         </div>
       </div>
-      <img class="post-photo" src="/api/shame/${p.id}/file?token=${encodeURIComponent(token||'')}" onclick="window.open('/api/shame/${p.id}/file?token=${encodeURIComponent(token||'')}','_blank')">
-      ${p.caption?`<p class="post-caption">${esc(p.caption)}</p>`:''}
-      ${renderPostComments(p.comments,'sh-c',p.id,'submitShameComment')}
+      ${photoGrid(p.photos,pid=>shamePhotoUrl(p.id,pid))}
+      ${p.caption?`<p class="post-caption" style="margin-top:12px">${esc(p.caption)}</p>`:''}
+      <button class="btn sm" style="margin-top:${p.caption?0:12}px" onclick="openShameComments(${p.id})">💬 Комментарии (${p.comment_count||0})</button>
     </div>`).join(''):'<div class="row muted">Пока нет записей</div>';
 }
-function shFilePicked(input){
-  const n=input.files.length;
-  $('sh-file-label').textContent=n?(`✅ Выбрано фото: ${n}`):'📷 Выбрать фото (можно несколько)';
+async function newShame(){
+  await ensureStaff();
+  openComposer({
+    title:'Новая запись',submitLabel:'Опубликовать',placeholder:'Что было сделано не так?',
+    tagOptions:shameTagOptions(null),path:'/api/shame',method:'POST',doneMsg:'Опубликовано ✅',onDone:loadShame
+  });
 }
-async function submitShame(){
-  const fileInput=$('sh-file'),files=Array.from(fileInput.files||[]);
-  if(!files.length)return toast('Выберите фото');
-  const caption=$('sh-caption').value.trim(),tagged=$('sh-tag').value;
-  const fd=new FormData();files.forEach(f=>fd.append('files',f));fd.append('caption',caption);if(tagged)fd.append('tagged_user_id',tagged);
-  const btn=$('sh-submit-btn');btn.disabled=true;btn.textContent='Публикация…';
-  try{
-    const r=await fetch('/api/shame',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
-    let data=null;try{data=await r.json()}catch(e){}
-    if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
-    toast('Опубликовано ✅');
-    fileInput.value='';$('sh-file-label').textContent='📷 Выбрать фото (можно несколько)';$('sh-caption').value='';$('sh-tag').value='';
-    loadShame();
-  }catch(e){toast(e.message||'Ошибка загрузки')}
-  finally{btn.disabled=false;btn.textContent='Опубликовать'}
-}
-async function submitShameComment(id){
-  const inp=$('sh-c-'+id),text=inp.value.trim();if(!text)return;
-  const r=await run(()=>api(`/api/shame/${id}/comments`,{method:'POST',body:{text}}));
-  if(r){inp.value='';loadShame()}
-}
-function editShame(id){
+async function editShame(id){
   const p=shameList.find(x=>x.id===id);if(!p)return;
-  const tagOpts='<option value="">Не отмечать никого</option>'+staffList.filter(u=>u.id!==me.id).map(u=>`<option value="${u.id}" ${p.tagged_user_id===u.id?'selected':''}>${esc(u.name)} — ${esc(ROLES[u.role]||'')}</option>`).join('');
-  $('sheet').innerHTML=`<h2>Изменить запись</h2>
-    <textarea class="field" id="sh-edit-caption" rows="3" style="margin-top:12px">${esc(p.caption)}</textarea>
-    <select class="field" id="sh-edit-tag" style="margin-top:12px">${tagOpts}</select>
-    <div class="actions" style="margin-top:14px">
-      <button class="btn" onclick="closeSheet()">Отмена</button>
-      <button class="btn primary" onclick="saveShameEdit(${id})">Сохранить</button>
-    </div>`;
-  $('ov').classList.add('on');
-}
-async function saveShameEdit(id){
-  const caption=$('sh-edit-caption').value.trim(),tagged=$('sh-edit-tag').value;
-  const r=await run(()=>api(`/api/shame/${id}`,{method:'PUT',body:{caption,tagged_user_id:tagged?Number(tagged):null}}));
-  if(r){closeSheet();toast('Сохранено');loadShame()}
+  await ensureStaff();
+  openComposer({
+    title:'Изменить запись',submitLabel:'Сохранить',placeholder:'Что было сделано не так?',
+    caption:p.caption,tagOptions:shameTagOptions(p.tagged_user_id),
+    existing:(p.photos||[]).map(ph=>({id:ph.id,url:shamePhotoUrl(id,ph.id)})),
+    path:`/api/shame/${id}`,method:'PUT',doneMsg:'Сохранено',onDone:loadShame
+  });
 }
 async function deleteShame(id){
-  if(!confirm('Удалить запись со стены позора?'))return;
+  if(!confirm('Удалить запись со стены позора вместе со всеми фото и комментариями?'))return;
   const r=await run(()=>api(`/api/shame/${id}`,{method:'DELETE'}));
-  if(r){toast('Удалено');loadShame()}
+  if(r&&!r.queued){toast('Удалено');loadShame()}
+}
+let commentsPostId=null;
+async function openShameComments(id){
+  commentsPostId=id;
+  $('sheet').innerHTML=`<h2>Комментарии</h2>
+    <div id="shc-list" style="margin-top:12px;max-height:50vh;overflow-y:auto"><div class="muted">Загрузка…</div></div>
+    <div class="post-comment-form">
+      <input class="field" placeholder="Комментарий…" id="shc-input" maxlength="1000" onkeydown="if(event.key==='Enter')sendShameComment()">
+      <button class="btn sm primary" id="shc-send" onclick="sendShameComment()">➤</button>
+    </div>
+    <div class="actions" style="margin-top:14px"><button class="btn" onclick="closeSheet()">Готово</button></div>`;
+  $('ov').classList.add('on');
+  await refreshShameComments();
+}
+async function refreshShameComments(){
+  const id=commentsPostId,list=await run(()=>api(`/api/shame/${id}/comments`));
+  const el=$('shc-list');if(!list||!el||commentsPostId!==id)return;
+  el.innerHTML=list.length?list.map(c=>`<div class="post-comment"><b>${esc(c.user_name)}:</b> ${esc(c.text)} <span class="muted" style="font-size:12px">· ${fmtShameDate(c.created_at)}</span></div>`).join(''):'<div class="muted">Комментариев пока нет — будьте первым.</div>';
+  el.scrollTop=el.scrollHeight;
+  const p=shameList.find(x=>x.id===id);if(p&&p.comment_count!==list.length){p.comment_count=list.length;renderShame()}
+}
+async function sendShameComment(){
+  const inp=$('shc-input'),text=inp.value.trim();if(!text)return;
+  const btn=$('shc-send');btn.disabled=true;
+  const r=await run(()=>api(`/api/shame/${commentsPostId}/comments`,{method:'POST',body:{text}}));
+  btn.disabled=false;
+  if(r){inp.value='';if(r.queued)toast('Нет сети — комментарий отправится позже');else refreshShameComments()}
 }
 
 /* ---------- ЗАМЕТКИ ---------- */

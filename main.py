@@ -426,16 +426,43 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
-        # Комментарии к фото-отчётам смены (как в шаме — автор, текст, время).
-        c.execute("""CREATE TABLE IF NOT EXISTS shift_photo_comments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, photo_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
-            text TEXT NOT NULL, created_at INTEGER NOT NULL)""")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_shift_photo_comments_photo ON shift_photo_comments(photo_id)")
+        # Отчёты смены (фото бара): 1 отчёт = 1 чек-поинт (или 1 доп. отчёт), внутри — несколько фото.
+        # Заменяет старую модель shift_photos (1 строка = 1 фото, UNIQUE(shift_id, slot)), в которой
+        # физически нельзя было привязать несколько фото к одному чек-поинту.
+        # Комментарии к отчётам убраны: таблица shift_photo_comments остаётся в старых базах, но не используется.
+        c.execute("""CREATE TABLE IF NOT EXISTS shift_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, shift_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            day TEXT NOT NULL, slot TEXT NOT NULL, caption TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL, edited_at INTEGER,
+            UNIQUE(shift_id, slot))""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_shift_reports_day ON shift_reports(day)")
+        c.execute("""CREATE TABLE IF NOT EXISTS shift_report_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, report_id INTEGER NOT NULL, file_path TEXT NOT NULL,
+            uploaded_at INTEGER NOT NULL)""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_shift_report_photos_report ON shift_report_photos(report_id)")
 
-        # Стена позора: посты (фото + подпись + отметка) и комментарии к ним.
+        # Миграция старых shift_photos → shift_reports + shift_report_photos (каждая старая запись = отдельный
+        # отчёт с одним фото). Перенесённые строки сразу удаляются из shift_photos, поэтому миграция
+        # выполняется ровно один раз и не «воскрешает» записи после архивации.
+        old_photos = c.execute("SELECT * FROM shift_photos").fetchall()
+        for p in old_photos:
+            cur = c.execute("""INSERT OR IGNORE INTO shift_reports (shift_id, user_id, day, slot, caption, created_at, edited_at)
+                                 VALUES (?,?,?,?,?,?,?)""",
+                             (p["shift_id"], p["user_id"], p["day"], p["slot"], p["caption"] or "",
+                              p["uploaded_at"], p["edited_at"]))
+            rid = cur.lastrowid if cur.rowcount else c.execute(
+                "SELECT id FROM shift_reports WHERE shift_id=? AND slot=?", (p["shift_id"], p["slot"])).fetchone()["id"]
+            c.execute("INSERT INTO shift_report_photos (report_id, file_path, uploaded_at) VALUES (?,?,?)",
+                      (rid, p["file_path"], p["uploaded_at"]))
+        if old_photos:
+            c.execute("DELETE FROM shift_photos")
+            logger.info(f"Миграция shift_photos → shift_reports: перенесено {len(old_photos)} фото")
+
+        # Стена позора: пост = подпись + отметка сотрудника; фото поста — в shame_post_photos (много на пост).
+        # Колонка file_path оставлена только для совместимости со старыми базами (новый код пишет туда '').
         c.execute("""CREATE TABLE IF NOT EXISTS shame_posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, day TEXT NOT NULL,
-            caption TEXT NOT NULL DEFAULT '', file_path TEXT NOT NULL, tagged_user_id INTEGER,
+            caption TEXT NOT NULL DEFAULT '', file_path TEXT NOT NULL DEFAULT '', tagged_user_id INTEGER,
             created_at INTEGER NOT NULL, edited_at INTEGER)""")
         c.execute("CREATE INDEX IF NOT EXISTS idx_shame_posts_day ON shame_posts(day)")
         try:
@@ -446,6 +473,20 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
             text TEXT NOT NULL, created_at INTEGER NOT NULL)""")
         c.execute("CREATE INDEX IF NOT EXISTS idx_shame_comments_post ON shame_comments(post_id)")
+        c.execute("""CREATE TABLE IF NOT EXISTS shame_post_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, file_path TEXT NOT NULL,
+            uploaded_at INTEGER NOT NULL)""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_shame_post_photos_post ON shame_post_photos(post_id)")
+
+        # Миграция старых постов (одно фото в shame_posts.file_path) → shame_post_photos.
+        # После переноса file_path очищается, так что повторно пост не мигрирует.
+        old_posts = c.execute("SELECT id, file_path, created_at FROM shame_posts WHERE file_path<>''").fetchall()
+        for p in old_posts:
+            c.execute("INSERT INTO shame_post_photos (post_id, file_path, uploaded_at) VALUES (?,?,?)",
+                      (p["id"], p["file_path"], p["created_at"]))
+            c.execute("UPDATE shame_posts SET file_path='' WHERE id=?", (p["id"],))
+        if old_posts:
+            logger.info(f"Миграция shame_posts.file_path → shame_post_photos: перенесено {len(old_posts)} фото")
 
         # Архивы: раз в ARCHIVE_INTERVAL_DAYS дней — по одной записи на категорию ('reports' / 'shame').
         c.execute("""CREATE TABLE IF NOT EXISTS archives (
@@ -1207,18 +1248,60 @@ def photo_checkpoints_for_shift(s: dict) -> list:
 REPORT_DISPLAY_DAYS = 3   # отчёты смены видны команде N дней (столько же, сколько до архивации)
 
 
-def photo_dict(r) -> dict:
-    return {"id": r["id"], "shift_id": r["shift_id"], "slot": r["slot"], "uploaded_at": r["uploaded_at"]}
+MAX_PHOTOS_PER_POST = 10   # лимит фото в одном отчёте смены / посте стены позора
 
 
-def photo_comments(c, photo_id: int, umap: dict) -> list:
-    rows = c.execute("SELECT * FROM shift_photo_comments WHERE photo_id=? ORDER BY created_at", (photo_id,)).fetchall()
-    return [{"id": cm["id"], "user_id": cm["user_id"], "user_name": umap.get(cm["user_id"], "Удалён"),
-             "text": cm["text"], "created_at": cm["created_at"]} for cm in rows]
+def remove_files(paths):
+    for p in paths:
+        try:
+            if p and os.path.exists(p):
+                os.remove(p)
+        except OSError:
+            pass
+
+
+def parse_keep_ids(raw: str) -> set:
+    return {int(x) for x in (raw or "").split(",") if x.strip().isdigit()}
+
+
+async def read_image_uploads(files: Optional[List[UploadFile]]) -> list:
+    """Читает загруженные файлы и возвращает [(ext, bytes), ...] — только непустые изображения."""
+    out = []
+    for f in files or []:
+        if not is_image_upload(f):
+            continue
+        data = await f.read()
+        if data:
+            out.append((photo_ext(f), data))
+    return out
+
+
+def write_photo_files(day_dir: str, prefix: str, uploads: list) -> list:
+    os.makedirs(day_dir, exist_ok=True)
+    paths = []
+    for ext, data in uploads:
+        fpath = os.path.join(day_dir, f"{prefix}_{int(time.time() * 1000)}_{secrets.token_hex(3)}.{ext}")
+        with open(fpath, "wb") as f:
+            f.write(data)
+        paths.append(fpath)
+    return paths
+
+
+def report_photos_list(c, report_id: int) -> list:
+    rows = c.execute("SELECT id, uploaded_at FROM shift_report_photos WHERE report_id=? ORDER BY id", (report_id,)).fetchall()
+    return [{"id": r["id"], "uploaded_at": r["uploaded_at"]} for r in rows]
 
 
 def report_can_edit(viewer: dict, owner_id: int) -> bool:
-    return viewer["id"] == owner_id or viewer["role"] in ADMIN_ROLES
+    """Изменять и удалять отчёт может только его автор. Старший бармен / бар-менеджер / мастер
+    видят отчёты команды, но чужие не редактируют."""
+    return viewer["id"] == owner_id
+
+
+def report_out(c, r, viewer: dict) -> dict:
+    return {"id": r["id"], "shift_id": r["shift_id"], "slot": r["slot"], "caption": r["caption"] or "",
+            "uploaded_at": r["created_at"], "edited_at": r["edited_at"], "user_id": r["user_id"],
+            "photos": report_photos_list(c, r["id"]), "can_edit": report_can_edit(viewer, r["user_id"])}
 
 
 @app.get("/api/shifts/photos/status")
@@ -1230,7 +1313,6 @@ async def photo_status(day: Optional[str] = None, user: dict = Depends(current_u
     admin = user["role"] in TEAM_ROLES
     with db() as c:
         rows = c.execute(SHIFT_SQL + " WHERE s.day IN (?,?) ORDER BY s.start_time", (target, prev_day)).fetchall()
-        umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
         result = []
         for r in rows:
             s = shift_dict(r)
@@ -1239,33 +1321,25 @@ async def photo_status(day: Optional[str] = None, user: dict = Depends(current_u
             cps = [cp for cp in photo_checkpoints_for_shift(s) if cp["date"] == target]
             if not cps:
                 continue
-            photos = {p["slot"]: p for p in c.execute("SELECT * FROM shift_photos WHERE shift_id=?", (s["id"],)).fetchall()}
+            reports = {p["slot"]: p for p in c.execute("SELECT * FROM shift_reports WHERE shift_id=?", (s["id"],)).fetchall()}
             checkpoints = []
             for cp in cps:
-                p = photos.get(cp["slot"])
+                p = reports.get(cp["slot"])
                 checkpoints.append({
                     "slot": cp["slot"], "due_at": cp["due_dt"].strftime("%H:%M"),
-                    "uploaded": bool(p), "photo_id": p["id"] if p else None,
-                    "uploaded_at": p["uploaded_at"] if p else None,
-                    "edited_at": p["edited_at"] if p else None,
-                    "caption": (p["caption"] if p else "") or "",
-                    "overdue": (not p) and now > cp["due_dt"],
-                    "comments": photo_comments(c, p["id"], umap) if p else [],
-                    "can_edit": report_can_edit(user, s["user_id"]) if p else False,
+                    "uploaded": bool(p), "overdue": (not p) and now > cp["due_dt"],
+                    "report": report_out(c, p, user) if p else None,
                 })
-            extra = c.execute("SELECT * FROM shift_photos WHERE shift_id=? AND slot LIKE 'extra_%' ORDER BY uploaded_at",
-                              (s["id"],)).fetchall()
+            extra = [p for p in sorted(reports.values(), key=lambda x: x["created_at"]) if p["slot"].startswith("extra_")]
             result.append({"shift_id": s["id"], "user_id": s["user_id"], "user_name": s["user_name"],
-                            "start": s["start"], "end": s["end"], "checkpoints": checkpoints,
-                            "extra_photos": [{"id": p["id"], "caption": p["caption"] or "", "uploaded_at": p["uploaded_at"],
-                                               "comments": photo_comments(c, p["id"], umap),
-                                               "can_edit": report_can_edit(user, s["user_id"])} for p in extra]})
+                           "start": s["start"], "end": s["end"], "checkpoints": checkpoints,
+                           "extra_reports": [report_out(c, p, user) for p in extra]})
     return result
 
 
 @app.get("/api/shifts/photos/mine")
 async def my_shift_photos(days: int = 14, user: dict = Depends(current_user)):
-    """Смены пользователя за последние N дней с уже загруженными фото — чтобы можно было
+    """Смены пользователя за последние N дней с количеством уже загруженных фото — чтобы можно было
     задним числом дозагрузить забытый отчёт, выбрав свою смену."""
     days = min(max(days, 1), 60)
     start = (datetime.now(MSK) - timedelta(days=days)).strftime("%Y-%m-%d")
@@ -1276,122 +1350,112 @@ async def my_shift_photos(days: int = 14, user: dict = Depends(current_user)):
         result = []
         for r in rows:
             s = shift_dict(r)
-            photos = c.execute("SELECT id, slot, caption, uploaded_at FROM shift_photos WHERE shift_id=? ORDER BY uploaded_at",
-                               (s["id"],)).fetchall()
-            result.append({**s, "photos": [dict(p) for p in photos]})
+            n = c.execute("""SELECT COUNT(*) FROM shift_report_photos p JOIN shift_reports sr ON sr.id = p.report_id
+                             WHERE sr.shift_id=?""", (s["id"],)).fetchone()[0]
+            result.append({**s, "photo_count": n})
     return result
 
 
-class PhotoCommentIn(BaseModel):
-    text: str
+def get_own_report(c, report_id: int, user: dict):
+    rep = c.execute("SELECT * FROM shift_reports WHERE id=?", (report_id,)).fetchone()
+    if not rep:
+        raise HTTPException(404, "Отчёт не найден")
+    if not report_can_edit(user, rep["user_id"]):
+        raise HTTPException(403, "Изменять и удалять отчёт может только его автор")
+    return rep
 
 
-@app.post("/api/shifts/photos/{photo_id}/comments")
-async def add_photo_comment(photo_id: int, body: PhotoCommentIn, user: dict = Depends(current_user)):
-    text = body.text.strip()
-    if not text:
-        raise HTTPException(400, "Пустой комментарий")
-    with db() as c:
-        p = c.execute("SELECT * FROM shift_photos WHERE id=?", (photo_id,)).fetchone()
-        if not p:
-            raise HTTPException(404, "Фото не найдено")
-        c.execute("INSERT INTO shift_photo_comments (photo_id, user_id, text, created_at) VALUES (?,?,?,?)",
-                  (photo_id, user["id"], text[:1000], int(time.time())))
-    if p["user_id"] and p["user_id"] != user["id"]:
-        send_push([p["user_id"]], "Новый комментарий", f"{user['name']}: {text[:120]}", "/#photos")
-    return {"status": "success"}
-
-
-class PhotoEditIn(BaseModel):
-    caption: str = ""
-
-
-@app.put("/api/shifts/photos/{photo_id}")
-async def edit_shift_photo(photo_id: int, body: PhotoEditIn, user: dict = Depends(current_user)):
-    with db() as c:
-        p = c.execute("SELECT * FROM shift_photos WHERE id=?", (photo_id,)).fetchone()
-        if not p:
-            raise HTTPException(404, "Фото не найдено")
-        if not report_can_edit(user, p["user_id"]):
-            raise HTTPException(403, "Можно изменять только свой отчёт")
-        c.execute("UPDATE shift_photos SET caption=?, edited_at=? WHERE id=?",
-                  (body.caption.strip()[:1000], int(time.time()), photo_id))
-    return {"status": "success"}
-
-
-@app.delete("/api/shifts/photos/{photo_id}")
-async def delete_shift_photo(photo_id: int, user: dict = Depends(current_user)):
-    with db() as c:
-        p = c.execute("SELECT * FROM shift_photos WHERE id=?", (photo_id,)).fetchone()
-        if not p:
-            raise HTTPException(404, "Фото не найдено")
-        if not report_can_edit(user, p["user_id"]):
-            raise HTTPException(403, "Можно удалять только свой отчёт")
-        try:
-            if os.path.exists(p["file_path"]):
-                os.remove(p["file_path"])
-        except OSError:
-            pass
-        c.execute("DELETE FROM shift_photo_comments WHERE photo_id=?", (photo_id,))
-        c.execute("DELETE FROM shift_photos WHERE id=?", (photo_id,))
-    return {"status": "success"}
-
-
-@app.post("/api/shifts/photos")
-async def upload_shift_photo(shift_id: int = Form(...), slot: str = Form(...), caption: str = Form(""),
+@app.post("/api/shifts/reports")
+async def create_shift_report(shift_id: int = Form(...), slot: str = Form(...), caption: str = Form(""),
                               files: List[UploadFile] = File(...), user: dict = Depends(current_user)):
+    """Один запрос = один отчёт со всеми фото и подписью. slot = время чек-поинта ('12:00', '20:00', '08:00')
+    или 'extra' для доп. отчёта. Повторная отправка на тот же чек-поинт полностью заменяет отчёт."""
     with db() as c:
         s = get_shift(c, shift_id)
-    if user["role"] not in ADMIN_ROLES and s["user_id"] != user["id"]:
-        raise HTTPException(403, "Это фото можно загрузить только для своей смены")
-    good_files = [f for f in files if is_image_upload(f)]
-    if not good_files:
-        raise HTTPException(400, "Нужно загрузить изображение")
-    if slot != "extra" and len(good_files) > 1:
-        raise HTTPException(400, "Для этого чек-поинта можно загрузить только одно фото")
-    caption_clean = caption.strip()[:1000]
-    saved = 0
-    with db() as c:
-        for file in good_files:
-            data = await file.read()
-            if not data:
-                continue
-            if slot == "extra":
-                # Дополнительное фото отчёта — без ограничения по количеству, можно добавлять сколько угодно.
-                day = s["date"]
-                real_slot = f"extra_{int(time.time() * 1000)}_{secrets.token_hex(3)}"
-                old = None
-            else:
-                valid_slots = {cp["slot"]: cp for cp in photo_checkpoints_for_shift(s)}
-                if slot not in valid_slots:
-                    raise HTTPException(400, "Для этой смены не требуется фото в это время")
-                day = valid_slots[slot]["date"]
-                real_slot = slot
-                old = c.execute("SELECT file_path FROM shift_photos WHERE shift_id=? AND slot=?", (shift_id, real_slot)).fetchone()
-            ext = photo_ext(file)
-            day_dir = os.path.join(PHOTOS_DIR, day)
-            os.makedirs(day_dir, exist_ok=True)
-            fname = f"{shift_id}_{real_slot.replace(':', '')}_{int(time.time() * 1000)}_{secrets.token_hex(2)}.{ext}"
-            fpath = os.path.join(day_dir, fname)
-            with open(fpath, "wb") as f:
-                f.write(data)
+    if s["user_id"] != user["id"]:
+        raise HTTPException(403, "Отчёт можно загрузить только за свою смену")
+    if slot == "extra":
+        day, real_slot = s["date"], f"extra_{int(time.time() * 1000)}_{secrets.token_hex(3)}"
+    else:
+        valid = {cp["slot"]: cp for cp in photo_checkpoints_for_shift(s)}
+        if slot not in valid:
+            raise HTTPException(400, "Для этой смены не требуется фото в это время")
+        day, real_slot = valid[slot]["date"], slot
+    uploads = await read_image_uploads(files)
+    if not uploads:
+        raise HTTPException(400, "Добавьте хотя бы одно фото")
+    if len(uploads) > MAX_PHOTOS_PER_POST:
+        raise HTTPException(400, f"Не больше {MAX_PHOTOS_PER_POST} фото в одном отчёте")
+    paths = write_photo_files(os.path.join(PHOTOS_DIR, day), f"{shift_id}_{real_slot.replace(':', '')}", uploads)
+    now = int(time.time())
+    old_files = []
+    try:
+        with db() as c:
+            old = c.execute("SELECT id FROM shift_reports WHERE shift_id=? AND slot=?", (shift_id, real_slot)).fetchone()
             if old:
-                try:
-                    if os.path.exists(old["file_path"]):
-                        os.remove(old["file_path"])
-                except OSError:
-                    pass
-            c.execute("""INSERT INTO shift_photos (shift_id, user_id, day, slot, file_path, uploaded_at, caption) VALUES (?,?,?,?,?,?,?)
-                         ON CONFLICT(shift_id, slot) DO UPDATE SET file_path=excluded.file_path, uploaded_at=excluded.uploaded_at, caption=excluded.caption""",
-                      (shift_id, s["user_id"], day, real_slot, fpath, int(time.time()), caption_clean))
-            saved += 1
-    return {"status": "success", "saved": saved}
+                old_files = [x["file_path"] for x in c.execute(
+                    "SELECT file_path FROM shift_report_photos WHERE report_id=?", (old["id"],)).fetchall()]
+                c.execute("DELETE FROM shift_report_photos WHERE report_id=?", (old["id"],))
+                c.execute("DELETE FROM shift_reports WHERE id=?", (old["id"],))
+            rid = c.execute("""INSERT INTO shift_reports (shift_id, user_id, day, slot, caption, created_at)
+                               VALUES (?,?,?,?,?,?)""",
+                            (shift_id, s["user_id"], day, real_slot, caption.strip()[:1000], now)).lastrowid
+            for p in paths:
+                c.execute("INSERT INTO shift_report_photos (report_id, file_path, uploaded_at) VALUES (?,?,?)", (rid, p, now))
+    except Exception:
+        remove_files(paths)
+        raise
+    remove_files(old_files)
+    return {"status": "success", "id": rid, "photos": len(paths)}
 
 
-@app.get("/api/shifts/photos/{photo_id}/file")
-async def get_shift_photo_file(photo_id: int, user: dict = Depends(current_user_flexible)):
+@app.put("/api/shifts/reports/{report_id}")
+async def update_shift_report(report_id: int, caption: str = Form(""), keep_photo_ids: str = Form(""),
+                              files: Optional[List[UploadFile]] = File(None), user: dict = Depends(current_user)):
+    """Редактирование отчёта (только автор): keep_photo_ids — id старых фото, которые остаются (через запятую),
+    остальные старые удаляются; files — новые фото. В итоге в отчёте должно остаться хотя бы одно фото."""
     with db() as c:
-        r = c.execute("SELECT * FROM shift_photos WHERE id=?", (photo_id,)).fetchone()
+        rep = get_own_report(c, report_id, user)
+        existing = c.execute("SELECT id, file_path FROM shift_report_photos WHERE report_id=?", (report_id,)).fetchall()
+    keep = parse_keep_ids(keep_photo_ids) & {p["id"] for p in existing}
+    uploads = await read_image_uploads(files)
+    total = len(keep) + len(uploads)
+    if total == 0:
+        raise HTTPException(400, "В отчёте должно быть хотя бы одно фото")
+    if total > MAX_PHOTOS_PER_POST:
+        raise HTTPException(400, f"Не больше {MAX_PHOTOS_PER_POST} фото в одном отчёте")
+    paths = write_photo_files(os.path.join(PHOTOS_DIR, rep["day"]), f"{rep['shift_id']}_{rep['slot'].replace(':', '')}", uploads)
+    removed = [p for p in existing if p["id"] not in keep]
+    now = int(time.time())
+    try:
+        with db() as c:
+            for p in removed:
+                c.execute("DELETE FROM shift_report_photos WHERE id=?", (p["id"],))
+            for p in paths:
+                c.execute("INSERT INTO shift_report_photos (report_id, file_path, uploaded_at) VALUES (?,?,?)", (report_id, p, now))
+            c.execute("UPDATE shift_reports SET caption=?, edited_at=? WHERE id=?", (caption.strip()[:1000], now, report_id))
+    except Exception:
+        remove_files(paths)
+        raise
+    remove_files([p["file_path"] for p in removed])
+    return {"status": "success"}
+
+
+@app.delete("/api/shifts/reports/{report_id}")
+async def delete_shift_report(report_id: int, user: dict = Depends(current_user)):
+    with db() as c:
+        get_own_report(c, report_id, user)
+        files = [x["file_path"] for x in c.execute("SELECT file_path FROM shift_report_photos WHERE report_id=?", (report_id,)).fetchall()]
+        c.execute("DELETE FROM shift_report_photos WHERE report_id=?", (report_id,))
+        c.execute("DELETE FROM shift_reports WHERE id=?", (report_id,))
+    remove_files(files)
+    return {"status": "success"}
+
+
+@app.get("/api/shifts/reports/{report_id}/photos/{photo_id}/file")
+async def get_shift_report_photo(report_id: int, photo_id: int, user: dict = Depends(current_user_flexible)):
+    with db() as c:
+        r = c.execute("SELECT file_path FROM shift_report_photos WHERE id=? AND report_id=?", (photo_id, report_id)).fetchone()
     if not r or not os.path.exists(r["file_path"]):
         raise HTTPException(404, "Фото не найдено")
     return FileResponse(r["file_path"])
@@ -1439,23 +1503,44 @@ async def check_photo_reminders():
 
 
 # ======================= СТЕНА ПОЗОРА =======================
+# Пост = подпись + (необязательно) отмеченный сотрудник + несколько фото (shame_post_photos).
+# Публиковать могут все, кроме официантов; комментировать и смотреть — все, включая официантов.
+# Изменять и удалять пост может только его автор (модерации админскими ролями нет).
 class ShameCommentIn(BaseModel):
     text: str
 
 
+def shame_photos_list(c, post_id: int) -> list:
+    rows = c.execute("SELECT id, uploaded_at FROM shame_post_photos WHERE post_id=? ORDER BY id", (post_id,)).fetchall()
+    return [{"id": r["id"], "uploaded_at": r["uploaded_at"]} for r in rows]
+
+
 def shame_post_dict(c, r, umap: dict, viewer: dict) -> dict:
-    comments = c.execute("SELECT * FROM shame_comments WHERE post_id=? ORDER BY created_at", (r["id"],)).fetchall()
-    can_edit = viewer["id"] == r["user_id"] or viewer["role"] in ADMIN_ROLES
+    own = viewer["id"] == r["user_id"]
     return {
         "id": r["id"], "day": r["day"], "caption": r["caption"] or "", "created_at": r["created_at"],
-        "edited_at": r["edited_at"] if "edited_at" in r.keys() else None,
+        "edited_at": r["edited_at"],
         "user_id": r["user_id"], "user_name": umap.get(r["user_id"], "Удалён"),
         "tagged_user_id": r["tagged_user_id"],
         "tagged_user_name": umap.get(r["tagged_user_id"]) if r["tagged_user_id"] else None,
-        "can_edit": can_edit, "can_delete": can_edit,
-        "comments": [{"id": cm["id"], "user_id": cm["user_id"], "user_name": umap.get(cm["user_id"], "Удалён"),
-                      "text": cm["text"], "created_at": cm["created_at"]} for cm in comments],
+        "photos": shame_photos_list(c, r["id"]),
+        "comment_count": c.execute("SELECT COUNT(*) FROM shame_comments WHERE post_id=?", (r["id"],)).fetchone()[0],
+        "can_edit": own, "can_delete": own,
     }
+
+
+def check_tagged_user(c, tagged_user_id: Optional[int]):
+    if tagged_user_id and not c.execute("SELECT 1 FROM users WHERE id=? AND status='approved'", (tagged_user_id,)).fetchone():
+        raise HTTPException(400, "Отмеченный пользователь не найден")
+
+
+def get_own_shame_post(c, post_id: int, user: dict):
+    r = c.execute("SELECT * FROM shame_posts WHERE id=?", (post_id,)).fetchone()
+    if not r:
+        raise HTTPException(404, "Запись не найдена")
+    if r["user_id"] != user["id"]:
+        raise HTTPException(403, "Изменять и удалять запись может только её автор")
+    return r
 
 
 @app.get("/api/shame")
@@ -1469,46 +1554,51 @@ async def list_shame(limit: int = 60, user: dict = Depends(current_user)):
 
 @app.post("/api/shame")
 async def create_shame(caption: str = Form(""), tagged_user_id: Optional[int] = Form(None),
-                        files: List[UploadFile] = File(...), user: dict = Depends(require_not_waiter)):
-    good_files = [f for f in files if is_image_upload(f)]
-    if not good_files:
-        raise HTTPException(400, "Нужно загрузить изображение")
+                       files: List[UploadFile] = File(...), user: dict = Depends(require_not_waiter)):
+    """Один запрос = один пост со всеми выбранными фото (раньше на каждое фото создавался отдельный пост)."""
+    uploads = await read_image_uploads(files)
+    if not uploads:
+        raise HTTPException(400, "Добавьте хотя бы одно фото")
+    if len(uploads) > MAX_PHOTOS_PER_POST:
+        raise HTTPException(400, f"Не больше {MAX_PHOTOS_PER_POST} фото в одной записи")
+    with db() as c:
+        check_tagged_user(c, tagged_user_id)
     day = datetime.now(MSK).strftime("%Y-%m-%d")
-    day_dir = os.path.join(SHAME_DIR, day)
-    os.makedirs(day_dir, exist_ok=True)
-    caption_clean = caption.strip()[:1000]
-    with db() as c:
-        if tagged_user_id and not c.execute("SELECT 1 FROM users WHERE id=? AND status='approved'", (tagged_user_id,)).fetchone():
-            raise HTTPException(400, "Отмеченный пользователь не найден")
-        post_ids = []
-        for file in good_files:
-            data = await file.read()
-            if not data:
-                continue
-            ext = photo_ext(file)
-            fname = f"{user['id']}_{int(time.time() * 1000)}_{secrets.token_hex(2)}.{ext}"
-            fpath = os.path.join(day_dir, fname)
-            with open(fpath, "wb") as f:
-                f.write(data)
-            cur = c.execute("""INSERT INTO shame_posts (user_id, day, caption, file_path, tagged_user_id, created_at)
-                              VALUES (?,?,?,?,?,?)""",
-                            (user["id"], day, caption_clean, fpath, tagged_user_id, int(time.time())))
-            post_ids.append(cur.lastrowid)
-    if not post_ids:
-        raise HTTPException(400, "Нужно загрузить изображение")
+    paths = write_photo_files(os.path.join(SHAME_DIR, day), str(user["id"]), uploads)
+    now = int(time.time())
+    try:
+        with db() as c:
+            post_id = c.execute("""INSERT INTO shame_posts (user_id, day, caption, file_path, tagged_user_id, created_at)
+                                   VALUES (?,?,?,?,?,?)""",
+                                (user["id"], day, caption.strip()[:1000], "", tagged_user_id, now)).lastrowid
+            for p in paths:
+                c.execute("INSERT INTO shame_post_photos (post_id, file_path, uploaded_at) VALUES (?,?,?)", (post_id, p, now))
+    except Exception:
+        remove_files(paths)
+        raise
     if tagged_user_id and tagged_user_id != user["id"]:
-        send_push([tagged_user_id], "Стена позора",
-                  f"{user['name']} отметил(а) вас в записи на стене позора", "/#shame")
-    return {"ids": post_ids, "status": "success"}
+        send_push([tagged_user_id], "Стена позора", f"{user['name']} отметил(а) вас в записи на стене позора", "/#shame")
+    return {"status": "success", "id": post_id, "photos": len(paths)}
 
 
-@app.get("/api/shame/{post_id}/file")
-async def get_shame_file(post_id: int, user: dict = Depends(current_user_flexible)):
+@app.get("/api/shame/{post_id}/photos/{photo_id}/file")
+async def get_shame_photo(post_id: int, photo_id: int, user: dict = Depends(current_user_flexible)):
     with db() as c:
-        r = c.execute("SELECT * FROM shame_posts WHERE id=?", (post_id,)).fetchone()
+        r = c.execute("SELECT file_path FROM shame_post_photos WHERE id=? AND post_id=?", (photo_id, post_id)).fetchone()
     if not r or not os.path.exists(r["file_path"]):
         raise HTTPException(404, "Фото не найдено")
     return FileResponse(r["file_path"])
+
+
+@app.get("/api/shame/{post_id}/comments")
+async def list_shame_comments(post_id: int, user: dict = Depends(current_user)):
+    with db() as c:
+        if not c.execute("SELECT 1 FROM shame_posts WHERE id=?", (post_id,)).fetchone():
+            raise HTTPException(404, "Запись не найдена")
+        rows = c.execute("SELECT * FROM shame_comments WHERE post_id=? ORDER BY created_at, id", (post_id,)).fetchall()
+        umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
+    return [{"id": cm["id"], "user_id": cm["user_id"], "user_name": umap.get(cm["user_id"], "Удалён"),
+             "text": cm["text"], "created_at": cm["created_at"]} for cm in rows]
 
 
 @app.post("/api/shame/{post_id}/comments")
@@ -1531,42 +1621,52 @@ async def add_shame_comment(post_id: int, body: ShameCommentIn, user: dict = Dep
     return {"status": "success"}
 
 
-class ShamePostEditIn(BaseModel):
-    caption: str = ""
-    tagged_user_id: Optional[int] = None
-
-
 @app.put("/api/shame/{post_id}")
-async def edit_shame_post(post_id: int, body: ShamePostEditIn, user: dict = Depends(current_user)):
+async def edit_shame_post(post_id: int, caption: str = Form(""), tagged_user_id: Optional[int] = Form(None),
+                          keep_photo_ids: str = Form(""), files: Optional[List[UploadFile]] = File(None),
+                          user: dict = Depends(current_user)):
+    """Редактирование поста (только автор): подпись, отмеченный сотрудник и набор фото
+    (keep_photo_ids — какие старые оставить, files — новые)."""
     with db() as c:
-        r = c.execute("SELECT * FROM shame_posts WHERE id=?", (post_id,)).fetchone()
-        if not r:
-            raise HTTPException(404, "Запись не найдена")
-        if r["user_id"] != user["id"] and user["role"] not in ADMIN_ROLES:
-            raise HTTPException(403, "Можно изменять только свою запись")
-        if body.tagged_user_id and not c.execute(
-                "SELECT 1 FROM users WHERE id=? AND status='approved'", (body.tagged_user_id,)).fetchone():
-            raise HTTPException(400, "Отмеченный пользователь не найден")
-        c.execute("UPDATE shame_posts SET caption=?, tagged_user_id=?, edited_at=? WHERE id=?",
-                  (body.caption.strip()[:1000], body.tagged_user_id, int(time.time()), post_id))
+        r = get_own_shame_post(c, post_id, user)
+        check_tagged_user(c, tagged_user_id)
+        existing = c.execute("SELECT id, file_path FROM shame_post_photos WHERE post_id=?", (post_id,)).fetchall()
+    keep = parse_keep_ids(keep_photo_ids) & {p["id"] for p in existing}
+    uploads = await read_image_uploads(files)
+    total = len(keep) + len(uploads)
+    if total == 0:
+        raise HTTPException(400, "В записи должно быть хотя бы одно фото")
+    if total > MAX_PHOTOS_PER_POST:
+        raise HTTPException(400, f"Не больше {MAX_PHOTOS_PER_POST} фото в одной записи")
+    paths = write_photo_files(os.path.join(SHAME_DIR, r["day"]), str(user["id"]), uploads)
+    removed = [p for p in existing if p["id"] not in keep]
+    now = int(time.time())
+    try:
+        with db() as c:
+            for p in removed:
+                c.execute("DELETE FROM shame_post_photos WHERE id=?", (p["id"],))
+            for p in paths:
+                c.execute("INSERT INTO shame_post_photos (post_id, file_path, uploaded_at) VALUES (?,?,?)", (post_id, p, now))
+            c.execute("UPDATE shame_posts SET caption=?, tagged_user_id=?, edited_at=? WHERE id=?",
+                      (caption.strip()[:1000], tagged_user_id, now, post_id))
+    except Exception:
+        remove_files(paths)
+        raise
+    remove_files([p["file_path"] for p in removed])
+    if tagged_user_id and tagged_user_id not in (r["tagged_user_id"], user["id"]):
+        send_push([tagged_user_id], "Стена позора", f"{user['name']} отметил(а) вас в записи на стене позора", "/#shame")
     return {"status": "success"}
 
 
 @app.delete("/api/shame/{post_id}")
 async def delete_shame_post(post_id: int, user: dict = Depends(current_user)):
     with db() as c:
-        r = c.execute("SELECT * FROM shame_posts WHERE id=?", (post_id,)).fetchone()
-        if not r:
-            raise HTTPException(404, "Запись не найдена")
-        if r["user_id"] != user["id"] and user["role"] not in ADMIN_ROLES:
-            raise HTTPException(403, "Можно удалять только свою запись")
-        try:
-            if os.path.exists(r["file_path"]):
-                os.remove(r["file_path"])
-        except OSError:
-            pass
+        get_own_shame_post(c, post_id, user)
+        files = [x["file_path"] for x in c.execute("SELECT file_path FROM shame_post_photos WHERE post_id=?", (post_id,)).fetchall()]
+        c.execute("DELETE FROM shame_post_photos WHERE post_id=?", (post_id,))
         c.execute("DELETE FROM shame_comments WHERE post_id=?", (post_id,))
         c.execute("DELETE FROM shame_posts WHERE id=?", (post_id,))
+    remove_files(files)
     return {"status": "success"}
 
 
@@ -1636,46 +1736,41 @@ async def run_archiving(manual: bool = False) -> dict:
     created = {}
     with db() as c:
         # --- Отчёты смены ---
-        rows = c.execute("""SELECT sp.id, sp.file_path, sp.day, sp.slot, sp.caption, COALESCE(u.name, 'Сотрудник') AS who
-                             FROM shift_photos sp LEFT JOIN users u ON u.id = sp.user_id""").fetchall()
-        manifest = [f"{r['day']} · {r['who']} · {r['slot']}" + (f" — {r['caption']}" if r["caption"] else "") for r in rows]
-        zip_path = build_archive_zip("reports", [(r["file_path"], r["day"], r["who"]) for r in rows], manifest)
+        rows = c.execute("""SELECT sr.id, sr.day, sr.slot, sr.caption, COALESCE(u.name, 'Сотрудник') AS who
+                             FROM shift_reports sr LEFT JOIN users u ON u.id = sr.user_id""").fetchall()
+        items, manifest = [], []
+        for r in rows:
+            photos = [x["file_path"] for x in c.execute("SELECT file_path FROM shift_report_photos WHERE report_id=?", (r["id"],)).fetchall()]
+            items += [(p, r["day"], r["who"]) for p in photos]
+            manifest.append(f"{r['day']} · {r['who']} · {r['slot']} · фото: {len(photos)}" + (f" — {r['caption']}" if r["caption"] else ""))
+        zip_path = build_archive_zip("reports", items, manifest)
         if zip_path:
-            replace_archive(c, "reports", zip_path, len(rows))
-            for r in rows:
-                try:
-                    if os.path.exists(r["file_path"]):
-                        os.remove(r["file_path"])
-                except OSError:
-                    pass
-            c.execute("DELETE FROM shift_photos")
-            created["reports"] = len(rows)
+            replace_archive(c, "reports", zip_path, len(items))
+            remove_files([it[0] for it in items])
+            c.execute("DELETE FROM shift_report_photos")
+            c.execute("DELETE FROM shift_reports")
+            created["reports"] = len(items)
 
         # --- Стена позора ---
-        rows = c.execute("""SELECT sp.id, sp.file_path, sp.day, sp.caption, sp.tagged_user_id, COALESCE(u.name, 'Сотрудник') AS who
+        rows = c.execute("""SELECT sp.id, sp.day, sp.caption, sp.tagged_user_id, COALESCE(u.name, 'Сотрудник') AS who
                              FROM shame_posts sp LEFT JOIN users u ON u.id = sp.user_id""").fetchall()
         umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
-        manifest = []
+        items, manifest = [], []
         for r in rows:
+            photos = [x["file_path"] for x in c.execute("SELECT file_path FROM shame_post_photos WHERE post_id=?", (r["id"],)).fetchall()]
+            items += [(p, r["day"], r["who"]) for p in photos]
             tagged = f", отмечен: {umap.get(r['tagged_user_id'])}" if r["tagged_user_id"] else ""
             comments = c.execute("SELECT text FROM shame_comments WHERE post_id=?", (r["id"],)).fetchall()
             cm = ("; комментарии: " + " | ".join(x["text"] for x in comments)) if comments else ""
-            manifest.append(f"{r['day']} · {r['who']}{tagged} — {r['caption']}{cm}")
-        zip_path = build_archive_zip("shame", [(r["file_path"], r["day"], r["who"]) for r in rows], manifest)
+            manifest.append(f"{r['day']} · {r['who']}{tagged} · фото: {len(photos)} — {r['caption']}{cm}")
+        zip_path = build_archive_zip("shame", items, manifest)
         if zip_path:
-            replace_archive(c, "shame", zip_path, len(rows))
-            post_ids = [r["id"] for r in rows]
-            for r in rows:
-                try:
-                    if os.path.exists(r["file_path"]):
-                        os.remove(r["file_path"])
-                except OSError:
-                    pass
-            if post_ids:
-                q = ",".join("?" * len(post_ids))
-                c.execute(f"DELETE FROM shame_comments WHERE post_id IN ({q})", post_ids)
+            replace_archive(c, "shame", zip_path, len(items))
+            remove_files([it[0] for it in items])
+            c.execute("DELETE FROM shame_comments WHERE post_id IN (SELECT id FROM shame_posts)")
+            c.execute("DELETE FROM shame_post_photos")
             c.execute("DELETE FROM shame_posts")
-            created["shame"] = len(rows)
+            created["shame"] = len(items)
 
         # Старые напоминания о фото больше не нужны
         cutoff_day = (datetime.now(MSK) - timedelta(days=ARCHIVE_INTERVAL_DAYS + 2)).strftime("%Y-%m-%d")
@@ -1713,22 +1808,14 @@ async def team_reports(actor: dict = Depends(require_team)):
     «Фото» старшему бармену, бар-менеджеру и мастеру, без отдельной архивации."""
     start = (datetime.now(MSK) - timedelta(days=REPORT_DISPLAY_DAYS - 1)).strftime("%Y-%m-%d")
     with db() as c:
-        rows = c.execute("""SELECT sp.id, sp.shift_id, sp.day, sp.slot, sp.caption, sp.uploaded_at, sp.edited_at, sp.user_id,
-                                    COALESCE(u.name, 'Сотрудник') AS who
-                             FROM shift_photos sp LEFT JOIN users u ON u.id = sp.user_id
-                             WHERE sp.day >= ?
-                             ORDER BY sp.day DESC, sp.uploaded_at DESC""", (start,)).fetchall()
-        umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
+        rows = c.execute("""SELECT sr.*, COALESCE(u.name, 'Сотрудник') AS who
+                             FROM shift_reports sr LEFT JOIN users u ON u.id = sr.user_id
+                             WHERE sr.day >= ?
+                             ORDER BY sr.day DESC, sr.created_at DESC""", (start,)).fetchall()
         days: dict = {}
         for r in rows:
             day_bucket = days.setdefault(r["day"], {})
-            person_bucket = day_bucket.setdefault(r["who"], [])
-            person_bucket.append({
-                "id": r["id"], "shift_id": r["shift_id"], "slot": r["slot"],
-                "caption": r["caption"] or "", "uploaded_at": r["uploaded_at"], "edited_at": r["edited_at"],
-                "user_id": r["user_id"], "comments": photo_comments(c, r["id"], umap),
-                "can_edit": report_can_edit(actor, r["user_id"]),
-            })
+            day_bucket.setdefault(r["who"], []).append(report_out(c, r, actor))
     return [{"day": day, "people": [{"name": name, "photos": photos} for name, photos in people.items()]}
             for day, people in sorted(days.items(), reverse=True)]
 
