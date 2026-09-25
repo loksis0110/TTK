@@ -399,12 +399,12 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
       <div class="hero"><span class="eyebrow">СМЕНА</span><h1>Стена позора</h1><p>Фото и подпись — что именно было сделано не так. Можно отметить виновного — ему придёт уведомление.</p></div>
       <div class="panel">
         <h3>Новая запись</h3>
-        <label class="btn block" style="cursor:pointer;text-align:center;margin-top:12px" id="sh-file-label">📷 Выбрать фото
-          <input type="file" accept="image/*" capture="environment" class="hidden" id="sh-file" onchange="$('sh-file-label').textContent=this.files[0]?('✅ '+this.files[0].name):'📷 Выбрать фото'">
+        <label class="btn block" style="cursor:pointer;text-align:center;margin-top:12px" id="sh-file-label">📷 Выбрать фото (можно несколько)
+          <input type="file" accept="image/*" multiple class="hidden" id="sh-file" onchange="shFilePicked(this)">
         </label>
         <textarea class="field" id="sh-caption" rows="2" placeholder="Что было сделано не так?" style="margin-top:12px"></textarea>
         <select class="field" id="sh-tag" style="margin-top:12px"><option value="">Не отмечать никого</option></select>
-        <button class="btn primary block" style="margin-top:14px" onclick="submitShame()">Опубликовать</button>
+        <button class="btn primary block" id="sh-submit-btn" style="margin-top:14px" onclick="submitShame()">Опубликовать</button>
       </div>
       <div id="shame-list"></div>
     </section>
@@ -424,8 +424,12 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
     <section class="view" id="view-team">
       <div class="hero"><span class="eyebrow">УПРАВЛЕНИЕ</span><h1>Команда</h1><p>Архивы отчётов и стены позора, подтверждение аккаунтов, роли и меню.</p></div>
 
+      <h2 class="h2">Отчёты смен (текущие)</h2>
+      <p class="muted" style="font-size:13px;margin:-8px 0 0">Живой просмотр ещё не заархивированных фото-отчётов — по дням и сотрудникам. Архивация не требуется.</p>
+      <div class="group" id="team-reports-list"></div>
+
       <h2 class="h2">Архивы</h2>
-      <p class="muted" style="font-size:13px;margin:-8px 0 0">Каждые 3 дня фото отчётов смены и фото со стены позора упаковываются в отдельные подписанные ZIP-архивы и удаляются из общего доступа. Архив хранится до следующей архивации, затем удаляется автоматически.</p>
+      <p class="muted" style="font-size:13px;margin:-8px 0 0">Каждые 3 дня фото отчётов смены и фото со стены позора упаковываются в отдельные подписанные ZIP-архивы (внутри — папки по категории, дню и сотруднику) и удаляются из общего доступа. Архив хранится до следующей архивации, затем удаляется автоматически.</p>
       <div class="bar"><span class="sp"></span><button class="btn sm primary" onclick="forceArchive()">📦 Архивировать сейчас</button></div>
       <div class="group" id="archives-list"></div>
 
@@ -959,7 +963,7 @@ function renderPhotos(){
               ${(!cp.uploaded&&isAdmin())?`<button class="btn sm" onclick="remindPhotoNow(${s.shift_id},'${cp.slot}')">📤 Напомнить сейчас</button>`:''}
               ${cp.uploaded
                 ?`<img src="/api/shifts/photos/${cp.photo_id}/file?token=${encodeURIComponent(token||'')}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;cursor:pointer" onclick="window.open('/api/shifts/photos/${cp.photo_id}/file?token=${encodeURIComponent(token||'')}','_blank')">`
-                :(mine?`<label class="btn sm primary" style="cursor:pointer">Загрузить<input type="file" accept="image/*" capture="environment" class="hidden" onchange="uploadPhoto(${s.shift_id},'${cp.slot}',this)"></label>`:'')}
+                :(mine?`<label class="btn sm primary" style="cursor:pointer">Загрузить<input type="file" accept="image/*" class="hidden" onchange="uploadPhoto(${s.shift_id},'${cp.slot}',this)"></label>`:'')}
             </div>
           </div>`).join('')}
         ${(s.extra_photos||[]).map(ep=>`
@@ -970,7 +974,7 @@ function renderPhotos(){
         ${mine?`
           <div class="row" style="flex-direction:column;align-items:stretch;gap:8px">
             <textarea class="field" id="extra-cap-${s.shift_id}" rows="1" placeholder="Подпись: что было сделано за смену (необязательно)"></textarea>
-            <label class="btn sm" style="cursor:pointer;text-align:center">+ Доп. фото отчёта<input type="file" accept="image/*" capture="environment" class="hidden" onchange="uploadExtraPhoto(${s.shift_id},this)"></label>
+            <label class="btn sm" style="cursor:pointer;text-align:center">+ Доп. фото отчёта (можно несколько)<input type="file" accept="image/*" multiple class="hidden" onchange="uploadExtraPhoto(${s.shift_id},this)"></label>
           </div>`:''}
       </div>
     </div>`;
@@ -986,8 +990,8 @@ async function remindPhotoNow(shiftId,slot){
   }catch(e){toast(e.message||'Ошибка отправки')}
 }
 async function uploadPhoto(shiftId,slot,input){
-  const file=input.files[0];if(!file)return;
-  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot',slot);fd.append('file',file);
+  const files=Array.from(input.files||[]);if(!files.length)return;
+  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot',slot);files.forEach(f=>fd.append('files',f));
   try{
     const r=await fetch('/api/shifts/photos',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
     let data=null;try{data=await r.json()}catch(e){}
@@ -997,14 +1001,14 @@ async function uploadPhoto(shiftId,slot,input){
   input.value='';
 }
 async function uploadExtraPhoto(shiftId,input){
-  const file=input.files[0];if(!file)return;
+  const files=Array.from(input.files||[]);if(!files.length)return;
   const capEl=$('extra-cap-'+shiftId),caption=capEl?capEl.value.trim():'';
-  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot','extra');fd.append('caption',caption);fd.append('file',file);
+  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot','extra');fd.append('caption',caption);files.forEach(f=>fd.append('files',f));
   try{
     const r=await fetch('/api/shifts/photos',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
     let data=null;try{data=await r.json()}catch(e){}
     if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
-    toast('Фото добавлено ✅');if(capEl)capEl.value='';loadPhotos();
+    toast(files.length>1?'Фото добавлены ✅':'Фото добавлено ✅');if(capEl)capEl.value='';loadPhotos();
   }catch(e){toast(e.message||'Ошибка загрузки')}
   input.value='';
 }
@@ -1022,21 +1026,21 @@ async function openMyShifts(){
       <div class="t">${esc(ddmmJS(s.date))} · ${esc(s.start)}–${esc(s.end)}</div>
       <div class="s">Уже загружено фото: ${s.photos.length}</div>
       <textarea class="field" placeholder="Подпись: что было сделано за смену" id="my-cap-${s.id}" rows="1"></textarea>
-      <label class="btn sm primary" style="cursor:pointer;text-align:center">+ Загрузить фото<input type="file" accept="image/*" capture="environment" class="hidden" onchange="uploadMyShiftPhoto(${s.id},this)"></label>
+      <label class="btn sm primary" style="cursor:pointer;text-align:center">+ Загрузить фото (можно несколько)<input type="file" accept="image/*" multiple class="hidden" onchange="uploadMyShiftPhoto(${s.id},this)"></label>
     </div>`).join('')}
     </div>
     <div class="actions"><button class="btn" onclick="closeSheet()">Готово</button></div>`;
   $('ov').classList.add('on');
 }
 async function uploadMyShiftPhoto(shiftId,input){
-  const file=input.files[0];if(!file)return;
+  const files=Array.from(input.files||[]);if(!files.length)return;
   const capEl=$('my-cap-'+shiftId),caption=capEl?capEl.value.trim():'';
-  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot','extra');fd.append('caption',caption);fd.append('file',file);
+  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot','extra');fd.append('caption',caption);files.forEach(f=>fd.append('files',f));
   try{
     const r=await fetch('/api/shifts/photos',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
     let data=null;try{data=await r.json()}catch(e){}
     if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
-    toast('Фото добавлено ✅');closeSheet();loadPhotos();
+    toast(files.length>1?'Фото добавлены ✅':'Фото добавлено ✅');closeSheet();loadPhotos();
   }catch(e){toast(e.message||'Ошибка загрузки')}
   input.value='';
 }
@@ -1075,19 +1079,25 @@ function renderShame(){
       </div>
     </div>`).join(''):'<div class="row muted">Пока нет записей</div>';
 }
+function shFilePicked(input){
+  const n=input.files.length;
+  $('sh-file-label').textContent=n?(`✅ Выбрано фото: ${n}`):'📷 Выбрать фото (можно несколько)';
+}
 async function submitShame(){
-  const fileInput=$('sh-file'),file=fileInput.files[0];
-  if(!file)return toast('Выберите фото');
+  const fileInput=$('sh-file'),files=Array.from(fileInput.files||[]);
+  if(!files.length)return toast('Выберите фото');
   const caption=$('sh-caption').value.trim(),tagged=$('sh-tag').value;
-  const fd=new FormData();fd.append('file',file);fd.append('caption',caption);if(tagged)fd.append('tagged_user_id',tagged);
+  const fd=new FormData();files.forEach(f=>fd.append('files',f));fd.append('caption',caption);if(tagged)fd.append('tagged_user_id',tagged);
+  const btn=$('sh-submit-btn');btn.disabled=true;btn.textContent='Публикация…';
   try{
     const r=await fetch('/api/shame',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
     let data=null;try{data=await r.json()}catch(e){}
     if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
     toast('Опубликовано ✅');
-    fileInput.value='';$('sh-file-label').textContent='📷 Выбрать фото';$('sh-caption').value='';$('sh-tag').value='';
+    fileInput.value='';$('sh-file-label').textContent='📷 Выбрать фото (можно несколько)';$('sh-caption').value='';$('sh-tag').value='';
     loadShame();
   }catch(e){toast(e.message||'Ошибка загрузки')}
+  finally{btn.disabled=false;btn.textContent='Опубликовать'}
 }
 async function submitShameComment(id){
   const inp=$('sh-c-'+id),text=inp.value.trim();if(!text)return;
@@ -1244,6 +1254,30 @@ async function refreshPending(){
   const n=users.filter(u=>u.status==='pending').length;
   $('pending-badge').textContent=n;$('pending-badge').classList.toggle('hidden',!n);
 }
+let teamReports=[];
+function fmtReportDate(ts){
+  const d=new Date(ts*1000);
+  return d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+async function loadTeamReports(){
+  const r=await run(()=>api('/api/team/reports'));if(!r)return;
+  teamReports=r;renderTeamReports();
+}
+function renderTeamReports(){
+  $('team-reports-list').innerHTML=teamReports.length?teamReports.map(day=>`
+    <div class="panel">
+      <h3>${esc(ddmmJS(day.day))}</h3>
+      ${day.people.map(p=>`
+        <div style="margin-top:10px">
+          <div class="t" style="font-weight:600">${esc(p.name)}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+            ${p.photos.map(ph=>`<a href="/api/shifts/photos/${ph.id}/file?token=${encodeURIComponent(token||'')}" target="_blank" title="${esc(ph.caption||ph.slot)}">
+              <img src="/api/shifts/photos/${ph.id}/file?token=${encodeURIComponent(token||'')}" style="width:72px;height:72px;object-fit:cover;border-radius:10px">
+            </a>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>`).join(''):'<div class="row muted">Пока нет незаархивированных отчётов</div>';
+}
 let archivesList=[];
 async function loadArchives(){
   const r=await run(()=>api('/api/archives'));if(!r)return;
@@ -1263,9 +1297,10 @@ function renderArchives(){
 async function forceArchive(){
   if(!confirm('Архивировать все текущие фото отчётов и стены позора прямо сейчас? Оригиналы будут упакованы в ZIP и удалены из общего доступа.'))return;
   const r=await run(()=>api('/api/archives/force',{method:'POST'}));
-  if(r){toast('Архивация выполнена ✅');loadArchives();if(tab==='photos')loadPhotos();if(tab==='shame')loadShame()}
+  if(r){toast('Архивация выполнена ✅');loadArchives();loadTeamReports();if(tab==='photos')loadPhotos();if(tab==='shame')loadShame()}
 }
 async function loadTeam(){
+  await loadTeamReports();
   await loadArchives();
   if(!isAdmin())return;
   await refreshPending();

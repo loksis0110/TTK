@@ -1144,6 +1144,31 @@ async def schedule_history(limit: int = 200, user: dict = Depends(current_user))
 
 
 # ======================= ФОТО СМЕНЫ (обязательные фото бара + напоминания + автоудаление) =======================
+# Расширения по content-type; если браузер/камера не прислали content-type (нередко на мобильных),
+# подстраховываемся расширением из имени файла — иначе валидные фото могли ошибочно отклоняться.
+CONTENT_TYPE_EXT = {
+    "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+    "image/heic": "heic", "image/heif": "heif", "image/gif": "gif",
+}
+IMAGE_EXTS = {"jpg", "jpeg", "png", "webp", "heic", "heif", "gif"}
+
+
+def is_image_upload(file: UploadFile) -> bool:
+    ct = (file.content_type or "").lower()
+    if ct.startswith("image/"):
+        return True
+    ext = os.path.splitext(file.filename or "")[1].lstrip(".").lower()
+    return ext in IMAGE_EXTS
+
+
+def photo_ext(file: UploadFile) -> str:
+    ext = CONTENT_TYPE_EXT.get((file.content_type or "").lower())
+    if ext:
+        return ext
+    ext = os.path.splitext(file.filename or "")[1].lstrip(".").lower()
+    return ext if ext in IMAGE_EXTS else "jpg"
+
+
 def hm_to_min(t: str) -> int:
     h, m = t.split(":")
     return int(h) * 60 + int(m)
@@ -1225,44 +1250,53 @@ async def my_shift_photos(days: int = 14, user: dict = Depends(current_user)):
 
 @app.post("/api/shifts/photos")
 async def upload_shift_photo(shift_id: int = Form(...), slot: str = Form(...), caption: str = Form(""),
-                              file: UploadFile = File(...), user: dict = Depends(current_user)):
+                              files: List[UploadFile] = File(...), user: dict = Depends(current_user)):
     with db() as c:
         s = get_shift(c, shift_id)
     if user["role"] not in ADMIN_ROLES and s["user_id"] != user["id"]:
         raise HTTPException(403, "Это фото можно загрузить только для своей смены")
-    if slot == "extra":
-        # Дополнительное фото отчёта — без ограничения по количеству, можно добавлять сколько угодно.
-        day = s["date"]
-        real_slot = f"extra_{int(time.time() * 1000)}_{secrets.token_hex(3)}"
-    else:
-        valid_slots = {cp["slot"]: cp for cp in photo_checkpoints_for_shift(s)}
-        if slot not in valid_slots:
-            raise HTTPException(400, "Для этой смены не требуется фото в это время")
-        day = valid_slots[slot]["date"]
-        real_slot = slot
-    if not (file.content_type or "").startswith("image/"):
+    good_files = [f for f in files if is_image_upload(f)]
+    if not good_files:
         raise HTTPException(400, "Нужно загрузить изображение")
-    data = await file.read()
-    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic"}.get(file.content_type, "jpg")
-    day_dir = os.path.join(PHOTOS_DIR, day)
-    os.makedirs(day_dir, exist_ok=True)
-    fname = f"{shift_id}_{real_slot.replace(':', '')}_{int(time.time())}.{ext}"
-    fpath = os.path.join(day_dir, fname)
+    if slot != "extra" and len(good_files) > 1:
+        raise HTTPException(400, "Для этого чек-поинта можно загрузить только одно фото")
+    caption_clean = caption.strip()[:1000]
+    saved = 0
     with db() as c:
-        old = None if slot == "extra" else c.execute(
-            "SELECT file_path FROM shift_photos WHERE shift_id=? AND slot=?", (shift_id, real_slot)).fetchone()
-        with open(fpath, "wb") as f:
-            f.write(data)
-        if old:
-            try:
-                if os.path.exists(old["file_path"]):
-                    os.remove(old["file_path"])
-            except OSError:
-                pass
-        c.execute("""INSERT INTO shift_photos (shift_id, user_id, day, slot, file_path, uploaded_at, caption) VALUES (?,?,?,?,?,?,?)
-                     ON CONFLICT(shift_id, slot) DO UPDATE SET file_path=excluded.file_path, uploaded_at=excluded.uploaded_at, caption=excluded.caption""",
-                  (shift_id, s["user_id"], day, real_slot, fpath, int(time.time()), caption.strip()[:1000]))
-    return {"status": "success"}
+        for file in good_files:
+            data = await file.read()
+            if not data:
+                continue
+            if slot == "extra":
+                # Дополнительное фото отчёта — без ограничения по количеству, можно добавлять сколько угодно.
+                day = s["date"]
+                real_slot = f"extra_{int(time.time() * 1000)}_{secrets.token_hex(3)}"
+                old = None
+            else:
+                valid_slots = {cp["slot"]: cp for cp in photo_checkpoints_for_shift(s)}
+                if slot not in valid_slots:
+                    raise HTTPException(400, "Для этой смены не требуется фото в это время")
+                day = valid_slots[slot]["date"]
+                real_slot = slot
+                old = c.execute("SELECT file_path FROM shift_photos WHERE shift_id=? AND slot=?", (shift_id, real_slot)).fetchone()
+            ext = photo_ext(file)
+            day_dir = os.path.join(PHOTOS_DIR, day)
+            os.makedirs(day_dir, exist_ok=True)
+            fname = f"{shift_id}_{real_slot.replace(':', '')}_{int(time.time() * 1000)}_{secrets.token_hex(2)}.{ext}"
+            fpath = os.path.join(day_dir, fname)
+            with open(fpath, "wb") as f:
+                f.write(data)
+            if old:
+                try:
+                    if os.path.exists(old["file_path"]):
+                        os.remove(old["file_path"])
+                except OSError:
+                    pass
+            c.execute("""INSERT INTO shift_photos (shift_id, user_id, day, slot, file_path, uploaded_at, caption) VALUES (?,?,?,?,?,?,?)
+                         ON CONFLICT(shift_id, slot) DO UPDATE SET file_path=excluded.file_path, uploaded_at=excluded.uploaded_at, caption=excluded.caption""",
+                      (shift_id, s["user_id"], day, real_slot, fpath, int(time.time()), caption_clean))
+            saved += 1
+    return {"status": "success", "saved": saved}
 
 
 @app.get("/api/shifts/photos/{photo_id}/file")
@@ -1343,29 +1377,37 @@ async def list_shame(limit: int = 60, user: dict = Depends(current_user)):
 
 @app.post("/api/shame")
 async def create_shame(caption: str = Form(""), tagged_user_id: Optional[int] = Form(None),
-                        file: UploadFile = File(...), user: dict = Depends(current_user)):
-    if not (file.content_type or "").startswith("image/"):
+                        files: List[UploadFile] = File(...), user: dict = Depends(current_user)):
+    good_files = [f for f in files if is_image_upload(f)]
+    if not good_files:
         raise HTTPException(400, "Нужно загрузить изображение")
-    data = await file.read()
-    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic"}.get(file.content_type, "jpg")
     day = datetime.now(MSK).strftime("%Y-%m-%d")
     day_dir = os.path.join(SHAME_DIR, day)
     os.makedirs(day_dir, exist_ok=True)
-    fname = f"{user['id']}_{int(time.time() * 1000)}.{ext}"
-    fpath = os.path.join(day_dir, fname)
-    with open(fpath, "wb") as f:
-        f.write(data)
+    caption_clean = caption.strip()[:1000]
     with db() as c:
         if tagged_user_id and not c.execute("SELECT 1 FROM users WHERE id=? AND status='approved'", (tagged_user_id,)).fetchone():
             raise HTTPException(400, "Отмеченный пользователь не найден")
-        cur = c.execute("""INSERT INTO shame_posts (user_id, day, caption, file_path, tagged_user_id, created_at)
-                          VALUES (?,?,?,?,?,?)""",
-                        (user["id"], day, caption.strip()[:1000], fpath, tagged_user_id, int(time.time())))
-        post_id = cur.lastrowid
+        post_ids = []
+        for file in good_files:
+            data = await file.read()
+            if not data:
+                continue
+            ext = photo_ext(file)
+            fname = f"{user['id']}_{int(time.time() * 1000)}_{secrets.token_hex(2)}.{ext}"
+            fpath = os.path.join(day_dir, fname)
+            with open(fpath, "wb") as f:
+                f.write(data)
+            cur = c.execute("""INSERT INTO shame_posts (user_id, day, caption, file_path, tagged_user_id, created_at)
+                              VALUES (?,?,?,?,?,?)""",
+                            (user["id"], day, caption_clean, fpath, tagged_user_id, int(time.time())))
+            post_ids.append(cur.lastrowid)
+    if not post_ids:
+        raise HTTPException(400, "Нужно загрузить изображение")
     if tagged_user_id and tagged_user_id != user["id"]:
         send_push([tagged_user_id], "Стена позора",
                   f"{user['name']} отметил(а) вас в записи на стене позора", "/#shame")
-    return {"id": post_id, "status": "success"}
+    return {"ids": post_ids, "status": "success"}
 
 
 @app.get("/api/shame/{post_id}/file")
@@ -1419,33 +1461,40 @@ def safe_fs_name(name: str) -> str:
     return name or "user"
 
 
-def unique_arcname(day: str, who: str, ext: str, used: set) -> str:
-    """Формирует имя файла внутри архива в формате Дата_Кто-загрузил, разруливая совпадения."""
-    base = f"{day}_{safe_fs_name(who)}"
-    name = f"{base}.{ext}"
-    i = 2
+CATEGORY_LABELS = {"reports": "Отчеты смен", "shame": "Стена позора"}
+
+
+def unique_arcname(ext: str, used: set) -> str:
+    """Формирует уникальное имя файла внутри папки человека (папки уже несут категорию/дату/имя)."""
+    i = 1
+    name = f"photo_{i}.{ext}"
     while name in used:
-        name = f"{base}_{i}.{ext}"
         i += 1
+        name = f"photo_{i}.{ext}"
     used.add(name)
     return name
 
 
 def build_archive_zip(category: str, items: list, manifest_lines: list) -> Optional[str]:
     """items: список (file_path, day, who). Пишет ZIP в ARCHIVES_DIR и возвращает путь, либо None, если архивировать нечего.
-    Внутри архива — сами фото, подписанные как Дата_Кто-загрузил, плюс текстовый файл 'описание.txt'
+    Внутри архива фото разложены по папкам: Категория/Дата/Сотрудник/фото — сначала по категории,
+    затем по дню, затем по конкретному человеку. Плюс текстовый файл 'описание.txt' в корне категории
     со сменой/чек-поинтом/подписью/комментариями для каждого файла — так подпись не теряется при упаковке."""
     items = [it for it in items if os.path.exists(it[0])]
     if not items:
         return None
     os.makedirs(ARCHIVES_DIR, exist_ok=True)
     zip_path = os.path.join(ARCHIVES_DIR, f"{category}_{int(time.time())}.zip")
-    used: set = set()
+    cat_folder = safe_fs_name(CATEGORY_LABELS.get(category, category))
+    used_per_folder: dict = {}
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for file_path, day, who in items:
             ext = (os.path.splitext(file_path)[1] or ".jpg").lstrip(".")
-            zf.write(file_path, unique_arcname(day, who, ext, used))
-        zf.writestr("описание.txt", "\n".join(manifest_lines) if manifest_lines else "Записей нет.")
+            person_folder = safe_fs_name(who)
+            folder_path = f"{cat_folder}/{day}/{person_folder}"
+            used = used_per_folder.setdefault(folder_path, set())
+            zf.write(file_path, f"{folder_path}/{unique_arcname(ext, used)}")
+        zf.writestr(f"{cat_folder}/описание.txt", "\n".join(manifest_lines) if manifest_lines else "Записей нет.")
     return zip_path
 
 
@@ -1541,6 +1590,28 @@ async def list_archives(actor: dict = Depends(require_team)):
     with db() as c:
         rows = c.execute("SELECT * FROM archives ORDER BY created_at DESC").fetchall()
     return [archive_dict(r) for r in rows]
+
+
+@app.get("/api/team/reports")
+async def team_reports(actor: dict = Depends(require_team)):
+    """Живой просмотр ещё не заархивированных фото-отчётов смен — доступно старшему бармену,
+    бар-менеджеру и мастеру без необходимости запускать архивацию (которая упаковала бы сразу
+    все категории, включая стену позора, и удалила бы оригиналы)."""
+    with db() as c:
+        rows = c.execute("""SELECT sp.id, sp.shift_id, sp.day, sp.slot, sp.caption, sp.uploaded_at, sp.user_id,
+                                    COALESCE(u.name, 'Сотрудник') AS who
+                             FROM shift_photos sp LEFT JOIN users u ON u.id = sp.user_id
+                             ORDER BY sp.day DESC, sp.uploaded_at DESC""").fetchall()
+    days: dict = {}
+    for r in rows:
+        day_bucket = days.setdefault(r["day"], {})
+        person_bucket = day_bucket.setdefault(r["who"], [])
+        person_bucket.append({
+            "id": r["id"], "shift_id": r["shift_id"], "slot": r["slot"],
+            "caption": r["caption"] or "", "uploaded_at": r["uploaded_at"], "user_id": r["user_id"],
+        })
+    return [{"day": day, "people": [{"name": name, "photos": photos} for name, photos in people.items()]}
+            for day, people in sorted(days.items(), reverse=True)]
 
 
 @app.get("/api/archives/{archive_id}/download")
