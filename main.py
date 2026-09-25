@@ -3779,6 +3779,18 @@ async def serve_manifest():
                          headers={"Cache-Control": "no-cache"})
 
 
+APP_ICONS = {"apple-touch-icon.png", "icon-192.png", "icon-512.png", "icon-maskable-512.png"}
+
+
+@app.get("/icons/{name}")
+async def serve_icon(name: str):
+    """Иконки приложения (экран «Домой», уведомления). Файлы лежат в папке icons/ рядом с main.py."""
+    path = os.path.join("icons", name)
+    if name in APP_ICONS and os.path.exists(path):
+        return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+    raise HTTPException(status_code=404, detail="Иконка не найдена")
+
+
 @app.get("/logo.png")
 async def serve_logo():
     if os.path.exists("logo.png"):

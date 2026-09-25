@@ -1,11 +1,11 @@
 /* Тугай — service worker
    1) Офлайн: приложение открывается без сети, данные берутся из последней сохранённой копии.
    2) Push-уведомления (в том числе на iPhone с iOS 16.4+, если сайт добавлен на экран «Домой»). */
-const VERSION = 'tugai-v5';
+const VERSION = 'tugai-v6';
 const SHELL = `${VERSION}-shell`;
 const API = 'tugai-api';        // без версии: данные переживают обновление приложения
 const IMG = 'tugai-img';
-const SHELL_FILES = ['/', '/manifest.json', '/logo.png'];
+const SHELL_FILES = ['/', '/manifest.json', '/icons/icon-192.png', '/icons/apple-touch-icon.png'];
 const NET_TIMEOUT = 4500;        // медленный Wi-Fi в баре: через 4.5 с показываем сохранённое
 
 self.addEventListener('install', e => {
@@ -101,8 +101,8 @@ self.addEventListener('push', e => {
   const title = d.title || 'Тугай';
   const opts = {
     body: d.body || '',
-    icon: '/logo.png',
-    badge: '/logo.png',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     tag: d.tag || undefined,
     renotify: !!d.tag,
     data: {url: d.url || '/'},

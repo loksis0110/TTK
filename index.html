@@ -10,7 +10,8 @@
 <meta name="theme-color" content="#0b0b10" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/logo.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <title>Тугай ТТК</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -384,8 +385,8 @@ label.lb{display:block;font-size:13px;font-weight:500;color:var(--sec);margin:16
 .hist .m{font-size:13px;color:var(--sec);margin:2px 0 0 34px}
 .ic{display:inline-flex;width:24px;height:24px;border-radius:50%;align-items:center;justify-content:center;font-size:12px;color:#fff;background:var(--ter);flex:none}
 .ic.add{background:#34c759}.ic.edit{background:#0071e3}.ic.delete,.ic.clear{background:#ff3b30}.ic.swap{background:#af52de}.ic.copy{background:#ff9f0a}.ic.undo{background:#8e8e93}
-.month-head{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:8px;font-size:12px;font-weight:600;color:var(--sec);text-align:center;text-transform:uppercase;letter-spacing:.03em}
-.month{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.month-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:8px;font-size:12px;font-weight:600;color:var(--sec);text-align:center;text-transform:uppercase;letter-spacing:.03em}
+.month{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
 .mday{background:var(--surface);border-radius:14px;padding:8px;min-height:96px;box-shadow:var(--shadow-sm);cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:transform .3s var(--spring),box-shadow .3s}
 .mday:active{transform:scale(.96)}
 @media (hover:hover){.mday:hover{box-shadow:var(--shadow);transform:translateY(-2px)}}
@@ -659,6 +660,17 @@ body{background:transparent}
 @media(max-width:760px){.lg-export>.ib{display:none}.lg-export .btns{width:100%}.lg-export .btns .btn.primary{flex:1}}
 @media(max-width:760px){.lg-tools .pills{flex:1 1 100%}.lg-tools .seg{flex:1}.lg-tools .seg button{flex:1}}
 
+@media(max-width:760px){.staff-row{flex-wrap:wrap;row-gap:10px}.staff-row>div:first-child{flex:1 1 100%}.staff-row>div:last-child{margin-left:48px;flex:1;justify-content:flex-start!important}.staff-row>div:last-child select.field{flex:1;min-width:0}}
+/* месяц: колонки не шире экрана, имена обрезаются многоточием */
+.mday{min-width:0;overflow:hidden}.mchip{max-width:100%}
+@media(max-width:430px){
+  #sch-seg{display:flex;width:100%}#sch-seg button{flex:1;padding:6px 4px;font-size:13px;min-width:0}
+  #sch-month .bar{flex-wrap:nowrap;gap:6px}#sch-month .wk{font-size:16px;white-space:nowrap}
+  #sch-month .bar .btn.sm{padding:6px 10px}
+  .month,.month-head{gap:3px}.mday{padding:4px 3px;min-height:58px;border-radius:9px;gap:2px}
+  .mday .n{font-size:12.5px;width:22px;height:22px}.mchip{font-size:9px;padding:1px 3px 1px 5px;border-radius:4px}
+  .mchip::before{width:2px}.month-head{font-size:10px;letter-spacing:0}
+}
 /* ---------- ГРАФИК: ТАБЛИЦА ---------- */
 .roster-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-sm);margin-bottom:10px;overscroll-behavior-x:contain}
 .roster{border-collapse:separate;border-spacing:0;width:100%;min-width:760px;font-size:14px}
@@ -3059,12 +3071,12 @@ async function loadTeam(){
   if(!isAdmin())return;
   await refreshPending();
   const pend=users.filter(u=>u.status==='pending'),act=users.filter(u=>u.status==='approved');
-  $('pending').innerHTML=pend.length?pend.map(u=>`<div class="row"><div style="display:flex;gap:12px;align-items:center">${avatar(u.name,'sm')}<div><div class="t">${esc(u.name)}</div><div class="s">@${esc(u.username)} · ${esc(u.created_at||'')}</div></div></div>
+  $('pending').innerHTML=pend.length?pend.map(u=>`<div class="row staff-row"><div style="display:flex;gap:12px;align-items:center">${avatar(u.name,'sm')}<div><div class="t">${esc(u.name)}</div><div class="s">@${esc(u.username)} · ${esc(u.created_at||'')}</div></div></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${roleSelect({id:u.id,role:'bartender'})}
     <button class="btn sm primary" onclick="approve(${u.id})">Подтвердить</button><button class="btn sm danger" onclick="removeUser(${u.id},'reject')">Отклонить</button></div></div>`).join(''):'<div class="row muted">Новых заявок нет</div>';
   $('staff').innerHTML=act.map(u=>{
     const locked=u.role==='master'||u.id===me.id;
-    return `<div class="row"><div style="display:flex;gap:12px;align-items:center;min-width:0">${avatar(u.name,'sm')}<div><div class="t">${esc(u.name)}${u.id===me.id?' <span class="muted">· вы</span>':''}</div><div class="s">@${esc(u.username)}</div></div></div>
+    return `<div class="row staff-row"><div style="display:flex;gap:12px;align-items:center;min-width:0">${avatar(u.name,'sm')}<div><div class="t">${esc(u.name)}${u.id===me.id?' <span class="muted">· вы</span>':''}</div><div class="s">@${esc(u.username)}</div></div></div>
       ${locked?`<span class="muted">${ROLES[u.role]}</span>`:`<div style="display:flex;gap:8px;align-items:center">${roleSelect(u,`setRole(${u.id},this.value)`)}<button class="btn icon sm" onclick="resetPassword(${u.id})" aria-label="Сбросить пароль" title="Сбросить пароль">${ic('key',17)}</button><button class="btn icon sm danger" onclick="removeUser(${u.id},'del')" aria-label="Удалить сотрудника">${ic('trash',17)}</button></div>`}</div>`}).join('');
   $('menu-list').innerHTML=menu.map(i=>`<div class="row"><div><div class="t">${esc(i.title)}</div><div class="s">${i.tab==='pf'?'ПФ':'Напитки'}</div></div><button class="btn icon sm danger" onclick="delMenu(${i.id})" aria-label="Удалить позицию">${ic('trash',17)}</button></div>`).join('');
 }
