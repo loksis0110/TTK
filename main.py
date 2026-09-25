@@ -514,6 +514,9 @@ def init_db():
             announcement_id INTEGER NOT NULL, user_id INTEGER NOT NULL, read_at INTEGER NOT NULL,
             PRIMARY KEY (announcement_id, user_id))""")
 
+        # Настройки уведомлений: какие категории пушей пользователь отключил.
+        c.execute("CREATE TABLE IF NOT EXISTS push_prefs (user_id INTEGER PRIMARY KEY, disabled TEXT NOT NULL DEFAULT '[]')")
+
         # Служебные значения (например, время следующей архивации) — переживают перезапуски и деплои.
         c.execute("CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         if not c.execute("SELECT 1 FROM app_meta WHERE key='next_archive_at'").fetchone():
@@ -684,11 +687,40 @@ def _push_now(user_ids: List[int], title: str, body: str, url: str = "/", tag: O
     return report
 
 
-def send_push(user_ids: List[int], title: str, body: str, url: str = "/", tag: Optional[str] = None):
-    """Отправляет пуш в фоне — запрос пользователя не ждёт сетевого ответа от Apple/Google."""
+# Категории уведомлений: ключ → (название, пояснение, кому доступна: None — всем, иначе набор ролей).
+PUSH_CATEGORIES = {
+    "schedule":     ("График", "Новые, изменённые и снятые смены", None),
+    "photo_remind": ("Напоминания об отчётах", "За 5 минут до чек-поинта и по просьбе руководителя", None),
+    "photo_late":   ("Пропущенные отчёты", "Если сотрудник не прислал отчёт вовремя", TEAM_ROLES),
+    "shame":        ("Отметки на стене позора", "Когда вас отмечают в записи", None),
+    "comments":     ("Комментарии", "К вашим записям и записям, где вы отмечены", None),
+    "stop":         ("Стоп-лист", "Позиция закончилась и её нельзя продавать", None),
+    "stop_back":    ("Снова в наличии", "Позицию убрали из стоп-листа", None),
+    "news":         ("Объявления", "Новые объявления от руководства", None),
+    "registration": ("Новые сотрудники", "Заявки на регистрацию, которые нужно подтвердить", ADMIN_ROLES),
+}
+
+
+def push_disabled(c, user_id: int) -> set:
+    r = c.execute("SELECT disabled FROM push_prefs WHERE user_id=?", (user_id,)).fetchone()
+    try:
+        return set(json.loads(r["disabled"])) if r else set()
+    except (ValueError, TypeError):
+        return set()
+
+
+def send_push(user_ids: List[int], title: str, body: str, url: str = "/", tag: Optional[str] = None,
+              cat: Optional[str] = None):
+    """Отправляет пуш в фоне — запрос пользователя не ждёт сетевого ответа от Apple/Google.
+    cat — категория уведомления: получатели, отключившие её в настройках, пуш не получат."""
     ids = sorted({int(u) for u in user_ids or [] if u})
     if not ids or not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
         return
+    if cat:
+        with db() as c:
+            ids = [u for u in ids if cat not in push_disabled(c, u)]
+        if not ids:
+            return
     threading.Thread(target=_push_now, args=(ids, title, body, url, tag), daemon=True).start()
 
 
@@ -780,6 +812,39 @@ async def push_status(user: dict = Depends(current_user)):
             "claims_ok": VAPID_CLAIMS_EMAIL.startswith(("mailto:", "https://")) and "example.com" not in VAPID_CLAIMS_EMAIL}
 
 
+class PushPrefsIn(BaseModel):
+    prefs: dict = {}
+
+
+def prefs_for(c, user: dict) -> list:
+    off = push_disabled(c, user["id"])
+    return [{"key": k, "title": t, "desc": d, "enabled": k not in off}
+            for k, (t, d, roles) in PUSH_CATEGORIES.items() if roles is None or user["role"] in roles]
+
+
+@app.get("/api/push/prefs")
+async def get_push_prefs(user: dict = Depends(current_user)):
+    with db() as c:
+        return {"categories": prefs_for(c, user)}
+
+
+@app.put("/api/push/prefs")
+async def set_push_prefs(body: PushPrefsIn, user: dict = Depends(current_user)):
+    """Включить/выключить категории уведомлений. Передаются только изменённые ключи: {"stop": false, ...}."""
+    with db() as c:
+        off = push_disabled(c, user["id"])
+        for k, v in (body.prefs or {}).items():
+            if k not in PUSH_CATEGORIES:
+                continue
+            if v:
+                off.discard(k)
+            else:
+                off.add(k)
+        c.execute("INSERT INTO push_prefs (user_id, disabled) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET disabled=excluded.disabled",
+                  (user["id"], json.dumps(sorted(off))))
+        return {"categories": prefs_for(c, user)}
+
+
 @app.post("/api/push/test")
 async def push_test(user: dict = Depends(current_user)):
     """Тестовый пуш себе — с подробным ответом сервисов Apple/Google, чтобы сразу видеть причину проблемы."""
@@ -821,7 +886,7 @@ async def register(body: RegisterIn):
         c.execute("INSERT INTO users (username, name, password, role, status, created_at) VALUES (?,?,?,?,?,?)",
                   (username, name, hash_pw(body.password), "", "pending", now_msk()))
         admins = approved_ids(c, roles=ADMIN_ROLES)
-    send_push(admins, "Новая регистрация", f"{name} ждёт подтверждения аккаунта", "/#team", "pending")
+    send_push(admins, "Новая регистрация", f"{name} ждёт подтверждения аккаунта", "/#team", "pending", cat="registration")
     return {"status": "pending"}
 
 
@@ -1111,7 +1176,7 @@ async def add_shift(body: ShiftIn, actor: dict = Depends(require_schedule_editor
             log_change(c, actor, "add", f"Добавлена смена: {fmt_shift(s)}", None, s)
             created += 1
     if created:
-        send_push([body.user_id], "Новая смена", f"Вам назначена смена: {fmt_shift(s)}", "/#schedule")
+        send_push([body.user_id], "Новая смена", f"Вам назначена смена: {fmt_shift(s)}", "/#schedule", "schedule", cat="schedule")
     return {"created": created}
 
 
@@ -1129,7 +1194,7 @@ async def edit_shift(sid: int, body: ShiftIn, actor: dict = Depends(require_sche
             log_change(c, actor, "edit", f"Изменена смена: {fmt_shift(before)} → {fmt_shift(after)}", before, after)
     if before != after:
         notify_ids = {before["user_id"], after["user_id"]}
-        send_push(list(notify_ids), "Смена изменена", f"{fmt_shift(before)} → {fmt_shift(after)}", "/#schedule")
+        send_push(list(notify_ids), "Смена изменена", f"{fmt_shift(before)} → {fmt_shift(after)}", "/#schedule", "schedule", cat="schedule")
     return {"status": "success"}
 
 
@@ -1139,7 +1204,7 @@ async def delete_shift(sid: int, actor: dict = Depends(require_schedule_editor))
         s = get_shift(c, sid)
         c.execute("DELETE FROM shifts WHERE id=?", (sid,))
         log_change(c, actor, "delete", f"Удалена смена: {fmt_shift(s)}", s, None)
-    send_push([s["user_id"]], "Смена отменена", f"Снята смена: {fmt_shift(s)}", "/#schedule", "schedule")
+    send_push([s["user_id"]], "Смена отменена", f"Снята смена: {fmt_shift(s)}", "/#schedule", "schedule", cat="schedule")
     return {"status": "success"}
 
 
@@ -1153,7 +1218,7 @@ async def swap_shifts(body: SwapIn, actor: dict = Depends(require_schedule_edito
         c.execute("UPDATE shifts SET user_id=? WHERE id=?", (a["user_id"], b["id"]))
         log_change(c, actor, "swap", f"Обмен сменами: {fmt_shift(a)} ⇄ {fmt_shift(b)}", [a, b],
                    [get_shift(c, a["id"]), get_shift(c, b["id"])])
-    send_push([a["user_id"], b["user_id"]], "Смены обменяны", f"{fmt_shift(a)} ⇄ {fmt_shift(b)}", "/#schedule")
+    send_push([a["user_id"], b["user_id"]], "Смены обменяны", f"{fmt_shift(a)} ⇄ {fmt_shift(b)}", "/#schedule", "schedule", cat="schedule")
     return {"status": "success"}
 
 
@@ -1251,7 +1316,7 @@ async def bulk_schedule(body: BulkIn, actor: dict = Depends(require_schedule_edi
         if uid == actor["id"] or not any(x["user_id"] == uid for x in added + removed):
             continue
         dates = ", ".join(ddmm(d) for d in sorted(days)[:6]) + ("…" if len(days) > 6 else "")
-        send_push([uid], "График обновлён", f"Изменения в ваших сменах: {dates}", "/#schedule", "schedule")
+        send_push([uid], "График обновлён", f"Изменения в ваших сменах: {dates}", "/#schedule", "schedule", cat="schedule")
     return {"added": len(added), "removed": len(removed), "shifts": added}
 
 
@@ -1634,7 +1699,7 @@ async def remind_photo_now(shift_id: int = Form(...), slot: str = Form(...), act
         raise HTTPException(400, "Для этой смены не требуется фото в это время")
     if not s["user_id"]:
         raise HTTPException(400, "У смены нет сотрудника")
-    send_push([s["user_id"]], "Фото бара", f"Напоминание: нужно сфотографировать бар (к {slot})", "/#photos")
+    send_push([s["user_id"]], "Фото бара", f"Напоминание: нужно сфотографировать бар (к {slot})", "/#photos", "photos", cat="photo_remind")
     return {"status": "success"}
 
 
@@ -1666,13 +1731,13 @@ async def check_photo_reminders():
                 if remind_at <= now < cp["due_dt"] and c.execute(
                         "INSERT OR IGNORE INTO photo_reminders_sent (shift_id, slot) VALUES (?,?)", (s["id"], cp["slot"])).rowcount:
                     to_send.append(([s["user_id"]], "Фото бара",
-                                    f"Через {PHOTO_REMINDER_MINUTES} мин нужно сфотографировать бар (к {cp['slot']})"))
+                                    f"Через {PHOTO_REMINDER_MINUTES} мин нужно сфотографировать бар (к {cp['slot']})", "photo_remind"))
                 if late_at <= now < late_at + timedelta(hours=2) and c.execute(
                         "INSERT OR IGNORE INTO photo_reminders_sent (shift_id, slot) VALUES (?,?)", (s["id"], "late:" + cp["slot"])).rowcount:
                     to_send.append(([u for u in team if u != s["user_id"]], "Нет отчёта",
-                                    f"{s['user_name']} не прислал(а) отчёт к {cp['slot']}"))
-    for ids, title, text in to_send:
-        send_push(ids, title, text, "/#photos", "photos")
+                                    f"{s['user_name']} не прислал(а) отчёт к {cp['slot']}", "photo_late"))
+    for ids, title, text, cat in to_send:
+        send_push(ids, title, text, "/#photos", "photos", cat=cat)
 
 
 # ======================= СТЕНА ПОЗОРА =======================
@@ -1750,7 +1815,7 @@ async def create_shame(caption: str = Form(""), tagged_user_id: Optional[int] = 
         remove_files(paths)
         raise
     if tagged_user_id and tagged_user_id != user["id"]:
-        send_push([tagged_user_id], "Стена позора", f"{user['name']} отметил(а) вас в записи на стене позора", "/#shame")
+        send_push([tagged_user_id], "Стена позора", f"{user['name']} отметил(а) вас в записи на стене позора", "/#shame", "shame", cat="shame")
     return {"status": "success", "id": post_id, "photos": len(paths)}
 
 
@@ -1790,7 +1855,7 @@ async def add_shame_comment(post_id: int, body: ShameCommentIn, user: dict = Dep
         notify_ids.add(post["tagged_user_id"])
     notify_ids.discard(user["id"])
     if notify_ids:
-        send_push(list(notify_ids), "Новый комментарий", f"{user['name']}: {text[:120]}", "/#shame")
+        send_push(list(notify_ids), "Новый комментарий", f"{user['name']}: {text[:120]}", "/#shame", "shame", cat="comments")
     return {"status": "success"}
 
 
@@ -1827,7 +1892,7 @@ async def edit_shame_post(post_id: int, caption: str = Form(""), tagged_user_id:
         raise
     remove_files([p["file_path"] for p in removed])
     if tagged_user_id and tagged_user_id not in (r["tagged_user_id"], user["id"]):
-        send_push([tagged_user_id], "Стена позора", f"{user['name']} отметил(а) вас в записи на стене позора", "/#shame")
+        send_push([tagged_user_id], "Стена позора", f"{user['name']} отметил(а) вас в записи на стене позора", "/#shame", "shame", cat="shame")
     return {"status": "success"}
 
 
@@ -2114,7 +2179,7 @@ async def add_stop(body: StopIn, actor: dict = Depends(require_not_waiter)):
         sid = c.execute("INSERT INTO stop_list (menu_item_id, name, note, user_id, created_at) VALUES (?,?,?,?,?)",
                         (body.menu_item_id, name, note, actor["id"], int(time.time()))).lastrowid
         others = approved_ids(c, exclude=actor["id"])
-    send_push(others, "Стоп-лист", f"⛔ {name}" + (f" — {note}" if note else "") + f" · {actor['name']}", "/#drinks", "stop")
+    send_push(others, "Стоп-лист", f"⛔ {name}" + (f" — {note}" if note else "") + f" · {actor['name']}", "/#drinks", "stop", cat="stop")
     return {"status": "success", "id": sid}
 
 
@@ -2139,7 +2204,7 @@ async def remove_stop(stop_id: int, actor: dict = Depends(require_not_waiter)):
         if not r:
             return {"status": "success"}          # уже снято (например, с другого телефона) — не ошибка
         others, name = _remove_stop(c, r, actor)
-    send_push(others, "Снова в наличии", f"✅ {name}", "/#drinks", "stop")
+    send_push(others, "Снова в наличии", f"✅ {name}", "/#drinks", "stop", cat="stop_back")
     return {"status": "success"}
 
 
@@ -2151,7 +2216,7 @@ async def remove_stop_by_menu(menu_item_id: int, actor: dict = Depends(require_n
         if not r:
             return {"status": "success"}
         others, name = _remove_stop(c, r, actor)
-    send_push(others, "Снова в наличии", f"✅ {name}", "/#drinks", "stop")
+    send_push(others, "Снова в наличии", f"✅ {name}", "/#drinks", "stop", cat="stop_back")
     return {"status": "success"}
 
 
@@ -2163,7 +2228,7 @@ async def remove_stop_by_name(name: str, actor: dict = Depends(require_not_waite
         if not r:
             return {"status": "success"}
         others, nm = _remove_stop(c, r, actor)
-    send_push(others, "Снова в наличии", f"✅ {nm}", "/#drinks", "stop")
+    send_push(others, "Снова в наличии", f"✅ {nm}", "/#drinks", "stop", cat="stop_back")
     return {"status": "success"}
 
 
@@ -2221,7 +2286,7 @@ async def create_announcement(body: AnnouncementIn, actor: dict = Depends(requir
         aid = c.execute("INSERT INTO announcements (user_id, title, body, pinned, created_at) VALUES (?,?,?,?,?)",
                         (actor["id"], title, text, int(body.pinned), int(time.time()))).lastrowid
         others = approved_ids(c, exclude=actor["id"])
-    send_push(others, "📣 " + (title or "Новое объявление"), (text or title)[:140], "/#news", f"ann{aid}")
+    send_push(others, "📣 " + (title or "Новое объявление"), (text or title)[:140], "/#news", f"ann{aid}", cat="news")
     return {"status": "success", "id": aid}
 
 
