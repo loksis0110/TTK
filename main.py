@@ -493,6 +493,17 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT NOT NULL, file_path TEXT NOT NULL,
             item_count INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)""")
         c.execute("CREATE INDEX IF NOT EXISTS idx_archives_category ON archives(category)")
+        try:
+            c.execute("ALTER TABLE archives ADD COLUMN summary TEXT NOT NULL DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
+        # Служебные значения (например, время следующей архивации) — переживают перезапуски и деплои.
+        c.execute("CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        if not c.execute("SELECT 1 FROM app_meta WHERE key='next_archive_at'").fetchone():
+            last = c.execute("SELECT MAX(created_at) FROM archives").fetchone()[0]
+            base = int(last) if last else int(time.time())
+            c.execute("INSERT INTO app_meta (key, value) VALUES ('next_archive_at', ?)",
+                      (str(base + ARCHIVE_INTERVAL_DAYS * 86400),))
 
         if c.execute("SELECT COUNT(*) FROM checklist_items").fetchone()[0] == 0:
             for shift, items in CHECKLIST_SEED.items():
@@ -685,8 +696,8 @@ async def lifespan(app: FastAPI):
                       misfire_grace_time=3600, coalesce=True, max_instances=1)
     scheduler.add_job(check_photo_reminders, "cron", minute="*", second=5,
                       misfire_grace_time=50, coalesce=True, max_instances=1)
-    scheduler.add_job(run_archiving, "interval", days=ARCHIVE_INTERVAL_DAYS,
-                      misfire_grace_time=3600, coalesce=True, max_instances=1)
+    scheduler.add_job(archive_if_due, "interval", minutes=5,
+                      misfire_grace_time=600, coalesce=True, max_instances=1)
     scheduler.start()
     async with AsyncExitStack() as stack:
         if max_webhook:
@@ -1245,10 +1256,8 @@ def photo_checkpoints_for_shift(s: dict) -> list:
     return out
 
 
-REPORT_DISPLAY_DAYS = 3   # отчёты смены видны команде N дней (столько же, сколько до архивации)
-
-
 MAX_PHOTOS_PER_POST = 10   # лимит фото в одном отчёте смены / посте стены позора
+MAX_PHOTO_BYTES = 25 * 1024 * 1024   # лимит размера одного фото
 
 
 def remove_files(paths):
@@ -1271,6 +1280,8 @@ async def read_image_uploads(files: Optional[List[UploadFile]]) -> list:
         if not is_image_upload(f):
             continue
         data = await f.read()
+        if len(data) > MAX_PHOTO_BYTES:
+            raise HTTPException(400, f"Фото «{f.filename or 'без имени'}» больше {MAX_PHOTO_BYTES // (1024 * 1024)} МБ")
         if data:
             out.append((photo_ext(f), data))
     return out
@@ -1347,13 +1358,28 @@ async def my_shift_photos(days: int = 14, user: dict = Depends(current_user)):
     with db() as c:
         rows = c.execute(SHIFT_SQL + " WHERE s.day BETWEEN ? AND ? AND s.user_id=? ORDER BY s.day DESC, s.start_time",
                          (start, end, user["id"])).fetchall()
+        now = datetime.now(MSK)
         result = []
         for r in rows:
             s = shift_dict(r)
             n = c.execute("""SELECT COUNT(*) FROM shift_report_photos p JOIN shift_reports sr ON sr.id = p.report_id
                              WHERE sr.shift_id=?""", (s["id"],)).fetchone()[0]
-            result.append({**s, "photo_count": n})
+            done = {x["slot"] for x in c.execute("SELECT slot FROM shift_reports WHERE shift_id=?", (s["id"],)).fetchall()}
+            cps = [{"slot": cp["slot"], "date": cp["date"], "uploaded": cp["slot"] in done,
+                    "overdue": cp["slot"] not in done and now > cp["due_dt"]} for cp in photo_checkpoints_for_shift(s)]
+            result.append({**s, "photo_count": n, "checkpoints": cps})
     return result
+
+
+@app.get("/api/shifts/reports/mine")
+async def my_reports(user: dict = Depends(current_user)):
+    """Все собственные отчёты, которые ещё не ушли в архив — автор может менять их до архивации."""
+    with db() as c:
+        rows = c.execute("""SELECT sr.*, s.start_time, s.end_time, s.day AS shift_day
+                            FROM shift_reports sr LEFT JOIN shifts s ON s.id = sr.shift_id
+                            WHERE sr.user_id=? ORDER BY sr.day DESC, sr.created_at DESC""", (user["id"],)).fetchall()
+        return [{**report_out(c, r, user), "day": r["day"], "shift_day": r["shift_day"],
+                 "shift_start": r["start_time"], "shift_end": r["end_time"]} for r in rows]
 
 
 def get_own_report(c, report_id: int, user: dict):
@@ -1493,9 +1519,13 @@ async def check_photo_reminders():
                 continue
             for cp in photo_checkpoints_for_shift(s):
                 remind_at = (cp["due_dt"] - timedelta(minutes=PHOTO_REMINDER_MINUTES)).replace(second=0, microsecond=0)
-                if remind_at != now:
+                # Окно, а не точное совпадение минуты: если задача запустилась с опозданием, напоминание не теряется.
+                if not (remind_at <= now < cp["due_dt"]):
                     continue
                 if c.execute("SELECT 1 FROM photo_reminders_sent WHERE shift_id=? AND slot=?", (s["id"], cp["slot"])).fetchone():
+                    continue
+                # Отчёт уже загружен заранее — напоминать не о чем.
+                if c.execute("SELECT 1 FROM shift_reports WHERE shift_id=? AND slot=?", (s["id"], cp["slot"])).fetchone():
                     continue
                 c.execute("INSERT OR IGNORE INTO photo_reminders_sent (shift_id, slot) VALUES (?,?)", (s["id"], cp["slot"]))
                 send_push([s["user_id"]], "Фото бара",
@@ -1544,7 +1574,7 @@ def get_own_shame_post(c, post_id: int, user: dict):
 
 
 @app.get("/api/shame")
-async def list_shame(limit: int = 60, user: dict = Depends(current_user)):
+async def list_shame(limit: int = 200, user: dict = Depends(current_user)):
     limit = min(max(limit, 1), 200)
     with db() as c:
         rows = c.execute("SELECT * FROM shame_posts ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
@@ -1671,147 +1701,205 @@ async def delete_shame_post(post_id: int, user: dict = Depends(current_user)):
 
 
 # ======================= АРХИВАЦИЯ (каждые ARCHIVE_INTERVAL_DAYS дней) =======================
+# Один запуск архивации = ОДИН ZIP, внутри две папки: «Отчёты смен» и «Стена позора».
+# В каждой папке — «журнал.txt» с полным описанием каждой записи (кто, когда, подпись, отметка,
+# комментарии, какие файлы относятся к записи). Журнал пишется всегда, даже если записей нет
+# или файл фото пропал с диска, — стена позора больше не может «потеряться» в архиве.
+# Как только создан новый архив, все предыдущие архивы удаляются (и файлы, и записи).
+CATEGORY_LABELS = {"reports": "Отчёты смен", "shame": "Стена позора"}
+
+
 def safe_fs_name(name: str) -> str:
     name = re.sub(r"[^\w\-]+", "_", name or "", flags=re.UNICODE).strip("_")
     return name or "user"
 
 
-CATEGORY_LABELS = {"reports": "Отчеты смен", "shame": "Стена позора"}
+def fmt_ts(ts) -> str:
+    return datetime.fromtimestamp(int(ts), MSK).strftime("%d.%m.%Y %H:%M") if ts else "—"
 
 
-def unique_arcname(ext: str, used: set) -> str:
-    """Формирует уникальное имя файла внутри папки человека (папки уже несут категорию/дату/имя)."""
-    i = 1
-    name = f"photo_{i}.{ext}"
-    while name in used:
-        i += 1
-        name = f"photo_{i}.{ext}"
-    used.add(name)
-    return name
+def get_meta(c, key: str, default=None):
+    r = c.execute("SELECT value FROM app_meta WHERE key=?", (key,)).fetchone()
+    return r["value"] if r else default
 
 
-def build_archive_zip(category: str, items: list, manifest_lines: list) -> Optional[str]:
-    """items: список (file_path, day, who). Пишет ZIP в ARCHIVES_DIR и возвращает путь, либо None, если архивировать нечего.
-    Внутри архива фото разложены по папкам: Категория/Дата/Сотрудник/фото — сначала по категории,
-    затем по дню, затем по конкретному человеку. Плюс текстовый файл 'описание.txt' в корне категории
-    со сменой/чек-поинтом/подписью/комментариями для каждого файла — так подпись не теряется при упаковке."""
-    items = [it for it in items if os.path.exists(it[0])]
-    if not items:
-        return None
-    os.makedirs(ARCHIVES_DIR, exist_ok=True)
-    zip_path = os.path.join(ARCHIVES_DIR, f"{category}_{int(time.time())}.zip")
-    cat_folder = safe_fs_name(CATEGORY_LABELS.get(category, category))
-    used_per_folder: dict = {}
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for file_path, day, who in items:
-            ext = (os.path.splitext(file_path)[1] or ".jpg").lstrip(".")
-            person_folder = safe_fs_name(who)
-            folder_path = f"{cat_folder}/{day}/{person_folder}"
-            used = used_per_folder.setdefault(folder_path, set())
-            zf.write(file_path, f"{folder_path}/{unique_arcname(ext, used)}")
-        zf.writestr(f"{cat_folder}/описание.txt", "\n".join(manifest_lines) if manifest_lines else "Записей нет.")
-    return zip_path
+def set_meta(c, key: str, value):
+    c.execute("INSERT INTO app_meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+              (key, str(value)))
 
 
-def replace_archive(c, category: str, zip_path: str, item_count: int):
-    """Архив хранится только до следующей архивации той же категории — предыдущий удаляется."""
-    old = c.execute("SELECT id, file_path FROM archives WHERE category=?", (category,)).fetchall()
-    for o in old:
-        try:
-            if os.path.exists(o["file_path"]):
-                os.remove(o["file_path"])
-        except OSError:
-            pass
-    c.execute("DELETE FROM archives WHERE category=?", (category,))
-    now = int(time.time())
-    c.execute("INSERT INTO archives (category, file_path, item_count, created_at, expires_at) VALUES (?,?,?,?,?)",
-              (category, zip_path, item_count, now, now + ARCHIVE_INTERVAL_DAYS * 86400))
+def next_archive_at(c) -> int:
+    return int(get_meta(c, "next_archive_at", int(time.time()) + ARCHIVE_INTERVAL_DAYS * 86400))
+
+
+def slot_title(slot: str) -> str:
+    return "Доп. отчёт" if (slot or "").startswith("extra_") else f"Отчёт к {slot}"
+
+
+def collect_reports(c):
+    """[(zip_folder, [file_paths], журнал_строки)] для отчётов смены."""
+    rows = c.execute("""SELECT sr.*, COALESCE(u.name, 'Сотрудник') AS who, s.start_time, s.end_time
+                        FROM shift_reports sr LEFT JOIN users u ON u.id = sr.user_id
+                        LEFT JOIN shifts s ON s.id = sr.shift_id
+                        ORDER BY sr.day, sr.created_at""").fetchall()
+    out = []
+    for r in rows:
+        photos = [x["file_path"] for x in c.execute(
+            "SELECT file_path FROM shift_report_photos WHERE report_id=? ORDER BY id", (r["id"],)).fetchall()]
+        t = datetime.fromtimestamp(r["created_at"], MSK).strftime("%H-%M")
+        folder = f"{safe_fs_name(CATEGORY_LABELS['reports'])}/{r['day']}/{safe_fs_name(r['who'])}/{t}_{safe_fs_name(slot_title(r['slot']))}_{r['id']}"
+        shift = f"{r['start_time']}–{r['end_time']}" if r["start_time"] else "смена удалена"
+        lines = [f"{slot_title(r['slot'])} · {r['day']} · смена {shift}",
+                 f"  Автор: {r['who']}",
+                 f"  Загружено: {fmt_ts(r['created_at'])}" + (f" · изменено: {fmt_ts(r['edited_at'])}" if r["edited_at"] else ""),
+                 f"  Подпись: {r['caption'] or '—'}"]
+        out.append((folder, photos, lines))
+    return rows, out
+
+
+def collect_shame(c):
+    rows = c.execute("""SELECT sp.*, COALESCE(u.name, 'Сотрудник') AS who
+                        FROM shame_posts sp LEFT JOIN users u ON u.id = sp.user_id
+                        ORDER BY sp.day, sp.created_at""").fetchall()
+    umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
+    out = []
+    for r in rows:
+        photos = [x["file_path"] for x in c.execute(
+            "SELECT file_path FROM shame_post_photos WHERE post_id=? ORDER BY id", (r["id"],)).fetchall()]
+        comments = c.execute("SELECT * FROM shame_comments WHERE post_id=? ORDER BY created_at, id", (r["id"],)).fetchall()
+        t = datetime.fromtimestamp(r["created_at"], MSK).strftime("%H-%M")
+        folder = f"{safe_fs_name(CATEGORY_LABELS['shame'])}/{r['day']}/{safe_fs_name(r['who'])}/{t}_запись_{r['id']}"
+        lines = [f"Запись №{r['id']} · {r['day']}",
+                 f"  Автор: {r['who']}",
+                 f"  Отмечен: {umap.get(r['tagged_user_id'], 'удалённый сотрудник') if r['tagged_user_id'] else '—'}",
+                 f"  Опубликовано: {fmt_ts(r['created_at'])}" + (f" · изменено: {fmt_ts(r['edited_at'])}" if r["edited_at"] else ""),
+                 f"  Подпись: {r['caption'] or '—'}",
+                 f"  Комментарии ({len(comments)}):" + ("" if comments else " —")]
+        lines += [f"    [{fmt_ts(cm['created_at'])}] {umap.get(cm['user_id'], 'Удалён')}: {cm['text']}" for cm in comments]
+        out.append((folder, photos, lines))
+    return rows, out
+
+
+def write_category(zf, category: str, entries: list, created_at: int) -> int:
+    """Пишет фото категории и её журнал. Возвращает число реально упакованных фото."""
+    cat = safe_fs_name(CATEGORY_LABELS[category])
+    packed = 0
+    log = [f"{CATEGORY_LABELS[category]} — архив от {fmt_ts(created_at)}", f"Записей: {len(entries)}", "=" * 60, ""]
+    for folder, photos, lines in entries:
+        log += lines
+        log.append(f"  Фото ({len(photos)}):")
+        for i, fp in enumerate(photos, 1):
+            ext = (os.path.splitext(fp)[1] or ".jpg").lstrip(".") or "jpg"
+            arc = f"{folder}/фото_{i}.{ext}"
+            if os.path.exists(fp):
+                zf.write(fp, arc)
+                packed += 1
+                log.append(f"    {arc}")
+            else:
+                log.append(f"    {arc} — файл не найден на сервере")
+        log.append("")
+    if not entries:
+        log.append("За этот период записей нет.")
+    zf.writestr(f"{cat}/журнал.txt", "\n".join(log))
+    return packed
+
+
+def delete_archive_rows(c, keep_id: Optional[int] = None):
+    rows = c.execute("SELECT id, file_path FROM archives").fetchall()
+    remove_files([r["file_path"] for r in rows if r["id"] != keep_id])
+    c.execute("DELETE FROM archives WHERE id<>?", (keep_id or -1,))
 
 
 async def run_archiving(manual: bool = False) -> dict:
-    """Раз в ARCHIVE_INTERVAL_DAYS дней: фото отчётов смен и фото со стены позора упаковываются
-    каждое в свой ZIP-архив (файлы подписаны как Дата_Кто-загрузил), оригиналы удаляются.
-    Архив хранится до следующей архивации этой же категории (максимум ARCHIVE_INTERVAL_DAYS дней),
-    после чего удаляется автоматически."""
-    created = {}
+    """Упаковывает все текущие отчёты смены и записи стены позора в один ZIP, очищает их из приложения,
+    удаляет все предыдущие архивы и назначает следующую архивацию через ARCHIVE_INTERVAL_DAYS дней."""
+    now = int(time.time())
+    result = {"reports": 0, "shame": 0, "report_photos": 0, "shame_photos": 0, "archive_id": None}
     with db() as c:
-        # --- Отчёты смены ---
-        rows = c.execute("""SELECT sr.id, sr.day, sr.slot, sr.caption, COALESCE(u.name, 'Сотрудник') AS who
-                             FROM shift_reports sr LEFT JOIN users u ON u.id = sr.user_id""").fetchall()
-        items, manifest = [], []
-        for r in rows:
-            photos = [x["file_path"] for x in c.execute("SELECT file_path FROM shift_report_photos WHERE report_id=?", (r["id"],)).fetchall()]
-            items += [(p, r["day"], r["who"]) for p in photos]
-            manifest.append(f"{r['day']} · {r['who']} · {r['slot']} · фото: {len(photos)}" + (f" — {r['caption']}" if r["caption"] else ""))
-        zip_path = build_archive_zip("reports", items, manifest)
-        if zip_path:
-            replace_archive(c, "reports", zip_path, len(items))
-            remove_files([it[0] for it in items])
-            c.execute("DELETE FROM shift_report_photos")
-            c.execute("DELETE FROM shift_reports")
-            created["reports"] = len(items)
-
-        # --- Стена позора ---
-        rows = c.execute("""SELECT sp.id, sp.day, sp.caption, sp.tagged_user_id, COALESCE(u.name, 'Сотрудник') AS who
-                             FROM shame_posts sp LEFT JOIN users u ON u.id = sp.user_id""").fetchall()
-        umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
-        items, manifest = [], []
-        for r in rows:
-            photos = [x["file_path"] for x in c.execute("SELECT file_path FROM shame_post_photos WHERE post_id=?", (r["id"],)).fetchall()]
-            items += [(p, r["day"], r["who"]) for p in photos]
-            tagged = f", отмечен: {umap.get(r['tagged_user_id'])}" if r["tagged_user_id"] else ""
-            comments = c.execute("SELECT text FROM shame_comments WHERE post_id=?", (r["id"],)).fetchall()
-            cm = ("; комментарии: " + " | ".join(x["text"] for x in comments)) if comments else ""
-            manifest.append(f"{r['day']} · {r['who']}{tagged} · фото: {len(photos)} — {r['caption']}{cm}")
-        zip_path = build_archive_zip("shame", items, manifest)
-        if zip_path:
-            replace_archive(c, "shame", zip_path, len(items))
-            remove_files([it[0] for it in items])
-            c.execute("DELETE FROM shame_comments WHERE post_id IN (SELECT id FROM shame_posts)")
-            c.execute("DELETE FROM shame_post_photos")
-            c.execute("DELETE FROM shame_posts")
-            created["shame"] = len(items)
-
-        # Старые напоминания о фото больше не нужны
+        rep_rows, rep_entries = collect_reports(c)
+        sh_rows, sh_entries = collect_shame(c)
+        set_meta(c, "next_archive_at", now + ARCHIVE_INTERVAL_DAYS * 86400)
+        if not rep_rows and not sh_rows:
+            logger.info("Архивация: архивировать нечего — прежний архив сохранён")
+            return result
+        os.makedirs(ARCHIVES_DIR, exist_ok=True)
+        stamp = datetime.fromtimestamp(now, MSK).strftime("%Y-%m-%d_%H-%M")
+        zip_path = os.path.join(ARCHIVES_DIR, f"Тугай_архив_{stamp}_{secrets.token_hex(2)}.zip")
+        try:
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                result["report_photos"] = write_category(zf, "reports", rep_entries, now)
+                result["shame_photos"] = write_category(zf, "shame", sh_entries, now)
+                zf.writestr("сводка.txt", "\n".join([
+                    f"Архив «Тугай» от {fmt_ts(now)}{' (вручную)' if manual else ''}",
+                    f"Отчёты смен: {len(rep_rows)} (фото: {result['report_photos']})",
+                    f"Стена позора: {len(sh_rows)} записей (фото: {result['shame_photos']})",
+                    f"Следующая архивация: {fmt_ts(now + ARCHIVE_INTERVAL_DAYS * 86400)}",
+                ]))
+        except Exception:
+            remove_files([zip_path])
+            raise
+        result.update(reports=len(rep_rows), shame=len(sh_rows))
+        summary = json.dumps({k: result[k] for k in ("reports", "shame", "report_photos", "shame_photos")})
+        aid = c.execute("""INSERT INTO archives (category, file_path, item_count, created_at, expires_at, summary)
+                           VALUES ('all',?,?,?,?,?)""",
+                        (zip_path, result["report_photos"] + result["shame_photos"], now,
+                         now + ARCHIVE_INTERVAL_DAYS * 86400, summary)).lastrowid
+        result["archive_id"] = aid
+        delete_archive_rows(c, keep_id=aid)          # новый архив появился → все старые удаляются
+        files = [fp for _, photos, _ in rep_entries + sh_entries for fp in photos]
+        c.execute("DELETE FROM shift_report_photos")
+        c.execute("DELETE FROM shift_reports")
+        c.execute("DELETE FROM shame_comments")
+        c.execute("DELETE FROM shame_post_photos")
+        c.execute("DELETE FROM shame_posts")
         cutoff_day = (datetime.now(MSK) - timedelta(days=ARCHIVE_INTERVAL_DAYS + 2)).strftime("%Y-%m-%d")
         c.execute("DELETE FROM photo_reminders_sent WHERE shift_id IN (SELECT id FROM shifts WHERE day<?)", (cutoff_day,))
+    remove_files(files)
+    logger.info(f"Архивация {'(вручную) ' if manual else ''}завершена: {result}")
+    return result
 
-        # Подстраховка: архив, который пережил свой срок хранения, удаляется в любом случае
-        expired = c.execute("SELECT id, file_path FROM archives WHERE expires_at < ?", (int(time.time()),)).fetchall()
-        for r in expired:
-            try:
-                if os.path.exists(r["file_path"]):
-                    os.remove(r["file_path"])
-            except OSError:
-                pass
-        c.execute("DELETE FROM archives WHERE expires_at < ?", (int(time.time()),))
 
-    logger.info(f"Архивация {'(вручную) ' if manual else ''}завершена: {created}")
-    return created
+async def archive_if_due():
+    """Проверяется каждые 5 минут: время следующей архивации хранится в базе, поэтому деплой
+    или перезапуск сервера больше не сбрасывает трёхдневный отсчёт."""
+    with db() as c:
+        due = next_archive_at(c) <= int(time.time())
+    if due:
+        await run_archiving()
 
 
 def archive_dict(r) -> dict:
-    return {"id": r["id"], "category": r["category"], "item_count": r["item_count"],
-            "created_at": r["created_at"], "expires_at": r["expires_at"], "filename": os.path.basename(r["file_path"])}
+    try:
+        summary = json.loads(r["summary"] or "{}")
+    except (ValueError, TypeError):
+        summary = {}
+    return {"id": r["id"], "category": r["category"], "item_count": r["item_count"], "created_at": r["created_at"],
+            "summary": summary, "filename": os.path.basename(r["file_path"])}
+
+
+@app.get("/api/archive/info")
+async def archive_info(user: dict = Depends(current_user)):
+    """Когда будет следующая архивация — до этого момента автор может менять свои отчёты и записи."""
+    with db() as c:
+        last = c.execute("SELECT MAX(created_at) FROM archives").fetchone()[0]
+        return {"next_at": next_archive_at(c), "last_at": last, "interval_days": ARCHIVE_INTERVAL_DAYS}
 
 
 @app.get("/api/archives")
 async def list_archives(actor: dict = Depends(require_team)):
     with db() as c:
         rows = c.execute("SELECT * FROM archives ORDER BY created_at DESC").fetchall()
-    return [archive_dict(r) for r in rows]
+    return [archive_dict(r) for r in rows if os.path.exists(r["file_path"])]
 
 
 @app.get("/api/team/reports")
 async def team_reports(actor: dict = Depends(require_team)):
-    """Отчёты смены (фото) за последние REPORT_DISPLAY_DAYS дней — показываются прямо во вкладке
-    «Фото» старшему бармену, бар-менеджеру и мастеру, без отдельной архивации."""
-    start = (datetime.now(MSK) - timedelta(days=REPORT_DISPLAY_DAYS - 1)).strftime("%Y-%m-%d")
+    """Все отчёты смены, которые ещё не ушли в архив, — показываются во вкладке «Фото»
+    старшему бармену, бар-менеджеру и мастеру (только просмотр; менять может только автор)."""
     with db() as c:
         rows = c.execute("""SELECT sr.*, COALESCE(u.name, 'Сотрудник') AS who
                              FROM shift_reports sr LEFT JOIN users u ON u.id = sr.user_id
-                             WHERE sr.day >= ?
-                             ORDER BY sr.day DESC, sr.created_at DESC""", (start,)).fetchall()
+                             ORDER BY sr.day DESC, sr.created_at DESC""").fetchall()
         days: dict = {}
         for r in rows:
             day_bucket = days.setdefault(r["day"], {})
@@ -1825,8 +1913,9 @@ async def download_archive(archive_id: int, actor: dict = Depends(require_team_f
     with db() as c:
         r = c.execute("SELECT * FROM archives WHERE id=?", (archive_id,)).fetchone()
     if not r or not os.path.exists(r["file_path"]):
-        raise HTTPException(404, "Архив не найден")
-    return FileResponse(r["file_path"], filename=os.path.basename(r["file_path"]), media_type="application/zip")
+        raise HTTPException(404, "Архив не найден — возможно, он уже заменён более новым")
+    name = datetime.fromtimestamp(r["created_at"], MSK).strftime("Тугай_архив_%Y-%m-%d_%H-%M.zip")
+    return FileResponse(r["file_path"], filename=name, media_type="application/zip")
 
 
 @app.post("/api/archives/force")
