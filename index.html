@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="Тугай ТТК">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0b0b10" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/logo.png">
@@ -34,7 +34,7 @@
   --green:#1d8a3a; --green-soft:rgba(40,167,69,.12);
   --red:#e30000; --red-soft:rgba(227,0,0,.08);
   --orange:#b64400; --orange-soft:rgba(255,149,0,.14);
-  --nav:rgba(250,250,252,.8); --seg-bg:#e3e3e8; --seg-on:#fff;
+  --nav:rgba(250,250,252,.72); --seg-bg:#e3e3e8; --seg-on:#fff;
   --shadow-sm:0 1px 2px rgba(0,0,0,.04);
   --shadow:0 2px 6px rgba(0,0,0,.04),0 12px 32px rgba(0,0,0,.06);
   --shadow-lg:0 20px 60px rgba(0,0,0,.18),0 2px 8px rgba(0,0,0,.06);
@@ -46,7 +46,7 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#000; --surface:#1d1d1f; --surface-2:#161617; --elev:#2c2c2e;
+  --bg:#0b0b10; --surface:#1c1c20; --surface-2:#16161a; --elev:#2c2c30;
   --text:#f5f5f7; --sec:#a1a1a6; --ter:#86868b;
   --line:rgba(255,255,255,.1); --line-strong:#424245;
   --fill:#2c2c2e; --fill-2:rgba(255,255,255,.05); --fill-3:rgba(255,255,255,.08);
@@ -54,12 +54,12 @@
   --green:#30d158; --green-soft:rgba(48,209,88,.16);
   --red:#ff453a; --red-soft:rgba(255,69,58,.16);
   --orange:#ff9f0a; --orange-soft:rgba(255,159,10,.16);
-  --nav:rgba(22,22,23,.8); --seg-bg:#1c1c1e; --seg-on:#636366;
+  --nav:rgba(20,20,26,.72); --seg-bg:#2a2a30; --seg-on:#636366;
   --shadow-sm:none; --shadow:0 0 0 1px rgba(255,255,255,.04); --shadow-lg:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.06);
   color-scheme:dark;
 }.logo{filter:invert(1)}}
 :root[data-theme="dark"]{
-  --bg:#000; --surface:#1d1d1f; --surface-2:#161617; --elev:#2c2c2e;
+  --bg:#0b0b10; --surface:#1c1c20; --surface-2:#16161a; --elev:#2c2c30;
   --text:#f5f5f7; --sec:#a1a1a6; --ter:#86868b;
   --line:rgba(255,255,255,.1); --line-strong:#424245;
   --fill:#2c2c2e; --fill-2:rgba(255,255,255,.05); --fill-3:rgba(255,255,255,.08);
@@ -67,7 +67,7 @@
   --green:#30d158; --green-soft:rgba(48,209,88,.16);
   --red:#ff453a; --red-soft:rgba(255,69,58,.16);
   --orange:#ff9f0a; --orange-soft:rgba(255,159,10,.16);
-  --nav:rgba(22,22,23,.8); --seg-bg:#1c1c1e; --seg-on:#636366;
+  --nav:rgba(20,20,26,.72); --seg-bg:#2a2a30; --seg-on:#636366;
   --shadow-sm:none; --shadow:0 0 0 1px rgba(255,255,255,.04); --shadow-lg:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.06);
   color-scheme:dark;
 }
@@ -520,10 +520,161 @@ label.lb{display:block;font-size:13px;font-weight:500;color:var(--sec);margin:16
 .arch-file .meta span{display:block;font-size:14px;color:var(--sec)}
 @media(max-width:560px){.arch-file{flex-wrap:wrap}.arch-file .btn{width:100%}}
 
+/* ---------- ЖИВОЙ ФОН ---------- */
+@property --g1{syntax:'<color>';inherits:true;initial-value:rgba(10,132,255,.3)}
+@property --g2{syntax:'<color>';inherits:true;initial-value:rgba(100,210,255,.22)}
+:root{--g1:rgba(10,132,255,.3);--g2:rgba(100,210,255,.22);--tab-accent:#0066cc;transition:--g1 1.4s var(--ease),--g2 1.4s var(--ease)}
+body{background:transparent}
+.ambient{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;background:var(--bg)}
+.ambient::before,.ambient::after{content:'';position:absolute;border-radius:50%;will-change:transform}
+.ambient::before{width:130vmax;height:90vmax;left:-45vmax;top:-55vmax;background:radial-gradient(closest-side,var(--g1),transparent 100%);animation:drift1 28s ease-in-out infinite alternate}
+.ambient::after{width:110vmax;height:80vmax;right:-45vmax;top:-40vmax;background:radial-gradient(closest-side,var(--g2),transparent 100%);animation:drift2 34s ease-in-out infinite alternate}
+@keyframes drift1{to{transform:translate(10vmax,8vmax) scale(1.08)}}
+@keyframes drift2{to{transform:translate(-8vmax,10vmax) scale(1.12)}}
+.eyebrow{color:var(--tab-accent);transition:color .9s var(--ease)}
+.auth{background:none}
+
+/* ---------- СТОП-ЛИСТ ---------- */
+.stop-banner{border-radius:var(--r);padding:16px 18px;margin:0 0 16px;background:linear-gradient(135deg,rgba(255,59,48,.16),rgba(255,59,48,.06));box-shadow:inset 0 0 0 1px rgba(255,59,48,.28);animation:viewIn .45s var(--spring)}
+.stop-banner.ok{display:flex;align-items:center;gap:12px;background:var(--surface);box-shadow:var(--shadow-sm)}
+.sb-head{display:flex;align-items:center;gap:12px}
+.sb-ic{width:42px;height:42px;border-radius:13px;background:#ff3b30;color:#fff;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 6px 18px rgba(255,59,48,.35)}
+.sb-ic.ok{background:var(--green-soft);color:var(--green);box-shadow:none;width:36px;height:36px;border-radius:11px}
+.sb-t{flex:1;min-width:0}
+.sb-t b{display:block;font-size:17px;font-weight:700;letter-spacing:-.01em}
+.stop-banner:not(.ok) .sb-t b{color:var(--red)}
+.sb-t span{display:block;font-size:14px;color:var(--sec)}
+.sb-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.sb-chip{border:0;border-radius:12px;padding:8px 14px;background:var(--surface);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;text-align:left;box-shadow:0 1px 2px rgba(0,0,0,.05),inset 0 0 0 1px rgba(255,59,48,.22);transition:transform .2s var(--spring)}
+.sb-chip:active{transform:scale(.96)}
+.sb-chip small{font-size:12px;color:var(--sec);font-weight:400}
+.sb-chip.pending{opacity:.75;box-shadow:inset 0 0 0 1.5px var(--orange)}
+.stop-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:#ff3b30;border-radius:6px;padding:3px 7px;vertical-align:4px;margin-left:6px}
+.card.stopped{box-shadow:inset 0 0 0 1.5px rgba(255,59,48,.5),var(--shadow-sm)}
+.card.stopped .card-title{opacity:.75}
+.stop-note{font-size:14px;color:var(--red);margin-top:6px}
+.card-foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:8px}
+.pill-count{display:inline-flex;min-width:20px;height:20px;border-radius:10px;background:#ff3b30;color:#fff;font-size:12px;font-weight:600;align-items:center;justify-content:center;padding:0 6px;margin-left:4px}
+.st-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:260px;overflow-y:auto}
+.st-item{display:flex;justify-content:space-between;align-items:center;gap:10px;border:0;background:var(--fill-2);border-radius:12px;padding:11px 14px;cursor:pointer;text-align:left;font-size:16px;color:var(--text)}
+.st-item small{color:var(--sec);font-size:13px;flex:none}
+.chip-btn{border:0;border-radius:980px;padding:7px 14px;background:var(--fill);font-size:14px;cursor:pointer;color:var(--text);transition:.2s}
+.chip-btn.on{background:#ff3b30;color:#fff}
+.st-item.on{background:var(--red-soft);box-shadow:inset 0 0 0 1.5px rgba(255,59,48,.5)}
+
+/* ---------- ОБЪЯВЛЕНИЯ ---------- */
+.ann{background:var(--surface);border-radius:var(--r-lg);padding:22px 24px;box-shadow:var(--shadow-sm);margin:0 0 16px;max-width:760px;position:relative;overflow:hidden}
+.ann.unread{box-shadow:inset 4px 0 0 var(--tab-accent),var(--shadow-sm)}
+.ann-title{font-size:23px;font-weight:700;letter-spacing:-.015em;margin-top:16px;line-height:1.22}
+.ann-body{margin-top:8px;font-size:17px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.ann-foot{display:flex;align-items:center;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);flex-wrap:wrap}
+.ann-ok{display:inline-flex;align-items:center;gap:6px;color:var(--green);font-size:14px;font-weight:500}
+.ann-pin{color:var(--orange);display:inline-flex;align-items:center;margin-right:2px}
+@media(max-width:760px){.ann{padding:18px;border-radius:22px}.ann-title{font-size:21px}}
+
+/* ---------- ГРАФИК: ТАБЛИЦА ---------- */
+.roster-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-sm);margin-bottom:10px;overscroll-behavior-x:contain}
+.roster{border-collapse:separate;border-spacing:0;width:100%;min-width:760px;font-size:14px}
+.roster th,.roster td{padding:0;text-align:center}
+.roster thead th{padding:12px 4px 10px;font-weight:500;color:var(--sec);border-bottom:1px solid var(--line)}
+.roster thead th span{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.roster thead th b{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border-radius:50%;font-size:17px;color:var(--text);font-weight:600;margin-top:2px}
+.roster thead th.today b{background:#ff3b30;color:#fff}
+.rs-name{position:sticky;left:0;z-index:2;background:var(--surface);text-align:left!important;padding:8px 10px 8px 16px!important;min-width:150px;width:164px;box-shadow:1px 0 0 var(--line)}
+.rs-name>div{display:flex;align-items:center;gap:9px}
+.rs-name b{display:block;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:112px;color:var(--text)}
+.rs-name small{display:block;font-size:11px;color:var(--sec);font-weight:400;white-space:nowrap}
+.roster tbody tr.me>*{background-image:linear-gradient(var(--accent-soft),var(--accent-soft))}
+.rs-group td span{position:sticky;left:16px}
+.rs-group td{text-align:left!important;padding:16px 16px 6px!important;font-size:12px;font-weight:600;color:var(--sec);text-transform:uppercase;letter-spacing:.05em}
+.rs-cell{height:54px;min-width:80px;padding:4px!important;border-top:1px solid var(--line);cursor:pointer;vertical-align:middle;transition:background .15s;user-select:none}
+.rs-cell.today{background-color:rgba(255,59,48,.045)}
+@media (hover:hover){.rs-cell:hover{background-color:var(--fill-2)}}
+.rs-cell.draft{background-color:var(--accent-soft)}
+.rs-cell.draft .sh{box-shadow:0 0 0 2px var(--accent)}
+.rs-plus{color:var(--ter);font-size:20px;font-weight:300;opacity:0;transition:opacity .15s}
+.rs-cell:hover .rs-plus,.roster.painting .rs-plus{opacity:.55}
+.rs-h{font-weight:600;min-width:60px;padding:0 12px!important;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.roster thead .rs-h{border-top:0}
+.roster tfoot th,.roster tfoot td{padding:11px 4px!important;border-top:1px solid var(--line);font-size:13px;color:var(--sec);font-weight:500}
+.sh{display:inline-flex;align-items:center;justify-content:center;gap:4px;border-radius:9px;padding:6px 9px;font-size:13px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums;transition:transform .2s var(--spring)}
+.sh+.sh{margin-top:3px}
+.sh .dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.7;display:inline-block}
+.sh.pending{outline:1.5px dashed currentColor;outline-offset:-3px}
+.sh.pick{box-shadow:0 0 0 2.5px var(--accent)}
+.rs-cell:active .sh{transform:scale(.94)}
+.p-day{background:rgba(255,159,10,.17);color:#a35400}
+.p-night{background:rgba(94,92,230,.16);color:#4b49c8}
+.p-noon{background:rgba(48,176,199,.17);color:#0b6e80}
+.p-other{background:var(--fill);color:var(--text)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .p-day{color:#ffb340}:root:not([data-theme="light"]) .p-night{color:#a5a3ff}:root:not([data-theme="light"]) .p-noon{color:#5ad4e6}}
+:root[data-theme="dark"] .p-day{color:#ffb340}:root[data-theme="dark"] .p-night{color:#a5a3ff}:root[data-theme="dark"] .p-noon{color:#5ad4e6}
+.brushbar{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 2px 14px;margin:0 -2px}
+.brushbar::-webkit-scrollbar{display:none}
+.brush{display:inline-flex;align-items:center;gap:7px;border:0;border-radius:980px;padding:9px 15px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line),var(--shadow-sm);font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;color:var(--text);transition:background .2s,color .2s,transform .2s var(--spring);flex:none}
+.brush:active{transform:scale(.95)}
+.brush small{color:var(--sec);font-weight:400}
+.brush.on{background:var(--text);color:var(--bg);box-shadow:none}.brush.on small{color:inherit;opacity:.7}
+.brush .sw{width:12px;height:12px;border-radius:4px;display:inline-block}
+.sw.p-day{background:#ff9f0a}.sw.p-night{background:#5e5ce6}.sw.p-noon{background:#30b0c7}.sw.p-other{background:#8e8e93}
+.brush.erase.on{background:var(--red);color:#fff}
+.draft-bar{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 20px;border-radius:980px;background:var(--elev);box-shadow:var(--shadow-lg);font-size:15px;max-width:calc(100% - 24px);white-space:nowrap;animation:barIn .45s var(--spring)}
+@keyframes barInM{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
+@keyframes barIn{from{transform:translate(-50%,30px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+.draft-bar .btn{min-height:36px}
+.now-strip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border-radius:var(--r-sm);padding:12px 16px;box-shadow:var(--shadow-sm);margin-bottom:14px;font-size:15px}
+.live{width:9px;height:9px;border-radius:50%;background:#34c759;animation:live 2s infinite;flex:none}
+@keyframes live{0%{box-shadow:0 0 0 0 rgba(52,199,89,.55)}70%{box-shadow:0 0 0 9px rgba(52,199,89,0)}100%{box-shadow:0 0 0 0 rgba(52,199,89,0)}}
+.now-p{display:inline-flex;align-items:center;gap:7px;background:var(--fill-2);border-radius:980px;padding:3px 12px 3px 3px;font-size:14px;font-weight:500}
+.now-p small{color:var(--sec);font-weight:400}
+.qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:18px}
+.qa{border:0;border-radius:18px;padding:16px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:3px;transition:transform .2s var(--spring)}
+.qa:active{transform:scale(.95)}
+.qa b{font-size:18px;font-weight:700}.qa span{font-size:14px;opacity:.85;font-variant-numeric:tabular-nums}
+.shv-head{display:flex;align-items:center;gap:14px;padding-right:40px}
+.shv-time{margin-top:20px;border-radius:18px;padding:18px 20px}
+.shv-time b{display:block;font-size:32px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.shv-time span{font-size:15px;opacity:.85}
+.mine-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;background:var(--surface);border-radius:var(--r-lg);padding:22px 26px;box-shadow:var(--shadow-sm);flex-wrap:wrap;margin-bottom:6px}
+.mine-hero b{display:block;font-size:26px;font-weight:700;letter-spacing:-.02em;margin-top:2px}
+.mine-stat{text-align:right}.mine-stat span{color:var(--sec);font-size:14px}
+.mday.has-me{box-shadow:inset 0 0 0 2px var(--accent),var(--shadow-sm)}
+.mchip.mine{font-weight:700}
+.hint{font-size:14px;text-align:center;margin:12px 0 0}
+#view-schedule{padding-bottom:84px}
+@media(max-width:760px){
+  .roster{min-width:0}
+  .rs-name{min-width:104px;width:104px;padding:6px 6px 6px 12px!important}
+  .rs-name .avatar{display:none}
+  .rs-name b{max-width:92px;font-size:13px}
+  .rs-cell{min-width:60px;height:50px;padding:3px!important}
+  .sh{padding:5px 6px;font-size:12px}
+  .rs-h{min-width:44px;padding:0 8px!important}
+  .roster thead th b{width:28px;height:28px;font-size:16px}
+  .draft-bar{left:12px;right:12px;transform:none;max-width:none;padding-left:18px;font-size:15px;animation:barInM .45s var(--spring)}
+  .draft-bar .db-t{flex:1;min-width:0}.draft-bar .dim{display:none}
+}
+
+/* ---------- АККАУНТ: уведомления ---------- */
+.acc-note{background:var(--fill-2);border-radius:16px;padding:14px 16px;margin-top:20px;font-size:15px;line-height:1.45}
+.acc-note ol{margin:8px 0;padding-left:20px}
+.acc-note.warn{background:var(--orange-soft);color:var(--orange);margin-top:12px}
+.acc-btn{width:100%;border:0;background:none;cursor:pointer;color:var(--text);font-size:16px;text-align:left}
+.kbd{display:inline-block;padding:0 6px;border-radius:6px;background:var(--fill);font-size:13px}
+.switch.busy{opacity:.5;pointer-events:none}
+
+/* ---------- ОЖИДАЕТ ОТПРАВКИ ---------- */
+.pending-thumbs{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+.pending-thumbs img{width:76px;height:76px;object-fit:cover;border-radius:12px}
+.pend-badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--orange);background:var(--orange-soft);padding:4px 10px;border-radius:980px}
+.pend{color:var(--orange)}
+.cp.waiting{background:var(--orange-soft)}.cp.waiting .cp-status{color:var(--orange)}
+
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
+<div class="ambient" aria-hidden="true"></div>
 
 <!-- ВХОД / РЕГИСТРАЦИЯ -->
 <div class="auth hidden" id="auth">
@@ -547,6 +698,7 @@ label.lb{display:block;font-size:13px;font-weight:500;color:var(--sec);margin:16
     <nav class="tabs" id="tabs" aria-label="Разделы">
       <button class="tab" data-t="drinks">Напитки</button>
       <button class="tab" data-t="pf">ПФ</button>
+      <button class="tab" data-t="news">Объявления<span class="badge hidden" id="news-badge"></span></button>
       <button class="tab" data-t="checklist">Чек-лист</button>
       <button class="tab" data-t="photos">Фото</button>
       <button class="tab" data-t="shame">Стена позора</button>
@@ -565,23 +717,41 @@ label.lb{display:block;font-size:13px;font-weight:500;color:var(--sec);margin:16
     <!-- ТТК -->
     <section class="view" id="view-cards">
       <div class="hero"><span class="eyebrow">Тугай Bar</span><h1 id="cards-title">Напитки</h1><p id="cards-sub">Технологические карты бара.</p></div>
+      <div id="stop-banner"></div>
       <input class="search" id="search" placeholder="Поиск по названию и составу" oninput="renderCards()" type="search">
       <div class="pills" id="filters">
         <button class="pill on" data-f="all">Все</button><button class="pill" data-f="cocktail">Коктейли</button>
         <button class="pill" data-f="lemonade">Лимонады</button><button class="pill" data-f="smoothie">Смузи</button>
-        <button class="pill" data-f="nonalk">Б/А</button><button class="pill" data-f="tea_coffee">Чай / Кофе</button>
+        <button class="pill" data-f="nonalk">Б/А</button><button class="pill" data-f="tea_coffee">Чай / Кофе</button><button class="pill" data-f="stop">Стоп-лист</button>
       </div>
       <div class="grid" id="cards"></div>
     </section>
 
     <!-- ГРАФИК -->
     <section class="view" id="view-schedule">
-      <div class="hero"><span class="eyebrow">Расписание</span><h1>График смен</h1><p>Кто и когда работает — с полной историей изменений.</p></div>
+      <div class="hero"><span class="eyebrow">Расписание</span><h1>График смен</h1><p>Кто и когда работает. Руководитель расставляет смены «кистью» — одним касанием на клетку.</p></div>
       <div class="bar">
-        <div class="seg" id="sch-seg"><button class="on" data-s="month">Месяц</button><button data-s="week">Неделя</button><button data-s="history">История</button></div>
-        <span class="sp"></span>
+        <div class="seg" id="sch-seg"><button data-s="week">Неделя</button><button data-s="month">Месяц</button><button data-s="mine">Мои смены</button><button data-s="history">История</button></div>
       </div>
-      <div id="sch-month">
+      <div id="sch-week">
+        <div id="now-strip"></div>
+        <div class="bar">
+          <button class="btn icon" onclick="shiftWeek(-1)" aria-label="Предыдущая неделя" data-ic="chevL"></button>
+          <div class="wk" id="wk-label"></div>
+          <button class="btn icon" onclick="shiftWeek(1)" aria-label="Следующая неделя" data-ic="chevR"></button>
+          <button class="btn sm" onclick="weekStart=monday(new Date());loadWeek()">Сегодня</button>
+          <span class="sp"></span>
+          <span class="edit-only" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn sm" onclick="copyPrevWeek()">Копировать прошлую неделю</button>
+            <button class="btn sm danger" onclick="clearWeek()">Очистить</button>
+          </span>
+        </div>
+        <div class="brushbar edit-only" id="brushbar"></div>
+        <div id="swapbar" class="swapbar hidden"><span>Нажмите на вторую смену для обмена</span><button onclick="cancelSwap()">Отмена</button></div>
+        <div class="roster-wrap" id="roster"></div>
+        <p class="muted hint" id="roster-hint"></p>
+      </div>
+      <div id="sch-month" class="hidden">
         <div class="bar">
           <button class="btn icon" onclick="shiftMonth(-1)" aria-label="Предыдущий месяц" data-ic="chevL"></button>
           <div class="wk" id="mo-label"></div>
@@ -590,30 +760,14 @@ label.lb{display:block;font-size:13px;font-weight:500;color:var(--sec);margin:16
         </div>
         <div class="month-head" id="month-head"></div>
         <div class="month" id="month"></div>
-        <p class="muted" style="font-size:14px;text-align:center;margin-top:16px">Нажмите на день, чтобы открыть неделю и назначить смены.</p>
+        <p class="muted hint">Дни с вашими сменами выделены. Нажмите на день, чтобы увидеть, кто работает.</p>
       </div>
-      <div id="sch-week" class="hidden">
-        <div class="bar">
-          <button class="btn icon" onclick="shiftWeek(-1)" aria-label="Предыдущая неделя" data-ic="chevL"></button>
-          <div class="wk" id="wk-label"></div>
-          <button class="btn icon" onclick="shiftWeek(1)" aria-label="Следующая неделя" data-ic="chevR"></button>
-          <button class="btn sm" onclick="weekStart=monday(new Date());loadWeek()">Сегодня</button>
-          <span class="sp"></span>
-          <span class="edit-only" style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn sm primary" onclick="openShift(null,iso(new Date()))" data-ic="plus">Смена</button>
-            <button class="btn sm" onclick="copyPrevWeek()">Копировать прошлую неделю</button>
-            <button class="btn sm danger" onclick="clearWeek()">Очистить неделю</button>
-          </span>
-        </div>
-        <div id="swapbar" class="swapbar hidden"><span>Выберите вторую смену для обмена</span><button onclick="cancelSwap()">Отмена</button></div>
-        <div class="week" id="week"></div>
-        <h2 class="h2" style="font-size:24px">Часы за неделю</h2>
-        <div class="group hours" id="hours"></div>
-      </div>
+      <div id="sch-mine" class="hidden"><div id="mine-list"></div></div>
       <div id="sch-history" class="hidden">
         <div class="bar edit-only"><span class="sp"></span><button class="btn sm" onclick="undoLast()">↩ Отменить последнее</button></div>
         <div class="group" id="history"></div>
       </div>
+      <div class="draft-bar hidden" id="draft-bar"></div>
     </section>
 
     <!-- ЗАЯВКИ -->
@@ -632,6 +786,17 @@ label.lb{display:block;font-size:13px;font-weight:500;color:var(--sec);margin:16
         </div>
       </div>
       <div class="group" id="orders"></div>
+    </section>
+
+    <!-- ОБЪЯВЛЕНИЯ -->
+    <section class="view" id="view-news">
+      <div class="hero"><span class="eyebrow">Команда</span><h1>Объявления</h1><p>Важное от руководства. Нажмите «Ознакомлен», чтобы все знали, что вы в курсе.</p></div>
+      <button class="compose-cta edit-only" onclick="openAnnEditor(null)">
+        <span class="cta-ic" data-ic="megaphone"></span>
+        <div><b>Новое объявление</b><span>Все сотрудники получат уведомление</span></div>
+        <span class="chev-r" data-ic="chevR"></span>
+      </button>
+      <div id="news-list"></div>
     </section>
 
     <!-- ЧЕК-ЛИСТ -->
@@ -749,7 +914,7 @@ const MONTHS_NOM=['Январь','Февраль','Март','Апрель','М�
 const DAYS=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 
 let token=localStorage.getItem('tugai_token'),me=null,menu=[],staffList=[],users=[];
-let tab='drinks',filter='all',schView='month',weekStart=monday(new Date()),schMonth=new Date(),shifts=[],swapFrom=null,ordersTimer=null,pendingOrders=[];
+let tab='drinks',filter='all',ordersTimer=null;
 const fromIso=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
 
 const $=id=>document.getElementById(id);
@@ -770,39 +935,102 @@ function applyTheme(t){
 }
 applyTheme(localStorage.getItem('tugai_theme')||'auto');
 
-/* ---------- ОФЛАЙН: очередь несинхронизированных действий ---------- */
+/* ---------- ОФЛАЙН-РЕЖИМ ----------
+   Чтение: service worker отдаёт последнюю сохранённую копию, если сети нет.
+   Запись: действия копятся в очереди (JSON — localStorage, фото — IndexedDB) и уходят сами, когда появляется связь.
+   Пока действие в очереди, оно уже видно в интерфейсе («ждёт отправки»). */
 const OUTBOX_KEY='tugai_outbox';
 function getOutbox(){try{return JSON.parse(localStorage.getItem(OUTBOX_KEY)||'[]')}catch(e){return[]}}
-function setOutbox(q){localStorage.setItem(OUTBOX_KEY,JSON.stringify(q));updateNetStatus()}
-function queueRequest(path,method,body){
-  const q=getOutbox();
-  q.push({id:Date.now()+'_'+Math.random().toString(36).slice(2),path,method,body});
-  setOutbox(q);
+function setOutbox(q){try{localStorage.setItem(OUTBOX_KEY,JSON.stringify(q))}catch(e){}updateNetStatus()}
+function queueRequest(path,method,body,meta){
+  const q=getOutbox(),it={id:Date.now()+'_'+Math.random().toString(36).slice(2),path,method,body,meta:meta||{},ts:Date.now()};
+  q.push(it);setOutbox(q);return it;
 }
+function dropQueued(pred){setOutbox(getOutbox().filter(x=>!pred(x)))}
+const tmpMap=(()=>{try{return JSON.parse(localStorage.getItem('tugai_tmpmap')||'{}')}catch(e){return{}}})();
+function setTmp(tmp,real){tmpMap[tmp]=real;try{localStorage.setItem('tugai_tmpmap',JSON.stringify(tmpMap))}catch(e){}}
+const isTmp=id=>String(id).startsWith('tmp_');
+const newTmp=()=>'tmp_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+/* фото, ожидающие отправки, — в IndexedDB (localStorage не умеет хранить файлы) */
+const idb={
+  db:null,
+  open(){
+    if(this.db)return Promise.resolve(this.db);
+    return new Promise((res,rej)=>{
+      if(!('indexedDB' in window))return rej(new Error('IndexedDB недоступен'));
+      const r=indexedDB.open('tugai',1);
+      r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('uploads'))r.result.createObjectStore('uploads',{keyPath:'id'})};
+      r.onsuccess=()=>{this.db=r.result;res(this.db)};r.onerror=()=>rej(r.error);
+    });
+  },
+  async run(mode,fn){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('uploads',mode);const q=fn(t.objectStore('uploads'));t.oncomplete=()=>res(q&&'result' in q?q.result:undefined);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})},
+  all(){return this.run('readonly',s=>s.getAll())},
+  put(v){return this.run('readwrite',s=>s.put(v))},
+  del(id){return this.run('readwrite',s=>s.delete(id))},
+};
+let pendingUploads=[];
+async function loadPendingUploads(){try{pendingUploads=(await idb.all())||[]}catch(e){pendingUploads=[]}updateNetStatus();return pendingUploads}
+async function queueUpload(item){
+  item.id='up_'+Date.now()+'_'+Math.random().toString(36).slice(2);item.ts=Date.now();item.user_id=me&&me.id;
+  await idb.put(item);await loadPendingUploads();return item;
+}
+async function cancelUpload(id){
+  if(!await askConfirm('Отменить отправку?','Фото из этого отчёта не будут отправлены.','Отменить',true))return;
+  await idb.del(id);await loadPendingUploads();reloadTab();
+}
+let pendingUrls=[];
+function pendingThumbs(up){
+  return `<div class="pending-thumbs">${(up.files||[]).slice(0,6).map(f=>{const u=URL.createObjectURL(f.blob);pendingUrls.push(u);return `<img src="${u}" alt="">`}).join('')}</div>`;
+}
+function releasePendingUrls(){pendingUrls.forEach(u=>URL.revokeObjectURL(u));pendingUrls=[]}
+
+let offlineData=false;
 function updateNetStatus(){
   const el=$('net-status');if(!el)return;
-  const n=getOutbox().length;
-  if(!navigator.onLine){el.textContent='📴 Офлайн'+(n?` · ${n} в очереди`:'');el.className='net-status off';el.classList.remove('hidden')}
-  else if(n){el.textContent=`🔄 Отправка (${n})…`;el.className='net-status pending';el.classList.remove('hidden')}
-  else{el.classList.add('hidden')}
+  const n=getOutbox().length+pendingUploads.length;
+  if(!navigator.onLine){el.textContent=n?`Офлайн · ждёт отправки: ${n}`:'Офлайн';el.className='net-status off'}
+  else if(n){el.textContent=flushing?`Отправка · ${n}`:`Ждёт отправки: ${n}`;el.className='net-status pending'}
+  else if(offlineData){el.textContent='Нет связи с сервером';el.className='net-status off'}
+  else{el.classList.add('hidden');return}
+  el.classList.remove('hidden');
 }
 let flushing=false;
+const softFail=s=>s>=400&&s<500&&![401,408,425,429].includes(s);
 async function flushOutbox(){
   if(!navigator.onLine||flushing||!token)return;
-  const q=getOutbox();if(!q.length)return;
-  flushing=true;
-  const done=new Set();let rejected=0;
-  for(const item of q){
-    let r;
-    try{r=await fetch(item.path,{method:item.method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:item.body!==undefined?JSON.stringify(item.body):undefined})}
-    catch(e){break}                                   // сети снова нет — остальное отправим позже
-    if(r.ok){done.add(item.id)}
-    else if(r.status>=400&&r.status<500&&r.status!==401&&r.status!==408&&r.status!==429){done.add(item.id);rejected++}
-    else break;
+  if(!getOutbox().length&&!(await loadPendingUploads()).length)return;
+  flushing=true;updateNetStatus();
+  let done=0;const rejected=[];
+  try{
+    for(const item of getOutbox()){
+      let r;
+      try{r=await fetch(item.path,{method:item.method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:item.body!==undefined?JSON.stringify(item.body):undefined})}
+      catch(e){return}                                              // сети снова нет — остальное позже
+      if(r.ok){
+        let data=null;try{data=await r.json()}catch(e){}
+        if(item.meta&&item.meta.tmpId&&data&&data.id)setTmp(item.meta.tmpId,data.id);
+        done++;dropQueued(x=>x.id===item.id);
+      }else if(softFail(r.status)){
+        let d=null;try{d=await r.json()}catch(e){}
+        rejected.push(typeof d?.detail==='string'?d.detail:`ошибка ${r.status}`);dropQueued(x=>x.id===item.id);
+      }else return;
+    }
+    for(const up of await loadPendingUploads()){
+      if(up.user_id&&me&&up.user_id!==me.id)continue;
+      const fd=new FormData();
+      Object.entries(up.fields||{}).forEach(([k,v])=>fd.append(k,v));
+      (up.files||[]).forEach(f=>fd.append('files',f.blob,f.name||'photo.jpg'));
+      let r;
+      try{r=await fetch(up.path,{method:up.method,headers:{Authorization:'Bearer '+token},body:fd})}catch(e){return}
+      if(r.ok){done++;await idb.del(up.id)}
+      else if(softFail(r.status)){let d=null;try{d=await r.json()}catch(e){}rejected.push(`${up.meta?.label||'Фото'}: ${typeof d?.detail==='string'?d.detail:r.status}`);await idb.del(up.id)}
+      else return;
+    }
+  }finally{
+    flushing=false;await loadPendingUploads();
+    if(done||rejected.length){toast(rejected.length?`Сервер не принял: ${rejected[0]}`:'Всё отправлено ✓');if(done)reloadTab()}
   }
-  setOutbox(getOutbox().filter(x=>!done.has(x.id)));    // перечитываем: за время отправки могли добавиться новые
-  flushing=false;
-  if(done.size){pendingOrders=[];toast(rejected?`Синхронизировано, отклонено: ${rejected}`:'Синхронизировано');reloadTab()}
 }
 function reloadTab(){
   if(tab==='orders')fetchOrders();
@@ -810,39 +1038,117 @@ function reloadTab(){
   else if(tab==='photos')loadPhotos();
   else if(tab==='shame')loadShame();
   else if(tab==='notes')loadNotes();
-  else if(tab==='schedule')({month:loadMonth,week:loadWeek,history:loadHistory})[schView]();
+  else if(tab==='news')loadNews();
+  else if(tab==='drinks'||tab==='pf')loadStop();
+  else if(tab==='schedule')reloadSchedule();
   else if(tab==='team')loadTeam();
 }
-window.addEventListener('online',()=>{updateNetStatus();flushOutbox()});
+window.addEventListener('online',()=>{offlineData=false;updateNetStatus();flushOutbox();warmCache()});
 window.addEventListener('offline',updateNetStatus);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)flushOutbox()});
-if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}))}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){flushOutbox();if(me){refreshUnread();if(tab==='drinks'||tab==='pf')loadStop()}}});
+setInterval(()=>{if(getOutbox().length||pendingUploads.length)flushOutbox()},20000);
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+  navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='open'){const h=new URL(e.data.url).hash.slice(1);if(h&&TABS.includes(h))go(h)}});
+}
+/* Прогреваем офлайн-копию: основные разделы подгружаются в фоне, чтобы без сети открывалось всё, а не только то, что уже смотрели. */
+async function warmCache(){
+  if(!navigator.onLine||!me)return;
+  const now=new Date(),g1=monthGrid(now),g2=monthGrid(new Date(now.getFullYear(),now.getMonth()+1,1));
+  const urls=['/api/menu','/api/stoplist','/api/announcements','/api/staff','/api/get_orders','/api/checklist/day','/api/checklist/night',
+    '/api/shifts/photos/status','/api/shifts/reports/mine','/api/shifts/photos/mine?days=14','/api/shame','/api/notes','/api/archive/info','/api/me'];
+  for(const u of urls){try{await fetch(u,{headers:{Authorization:'Bearer '+token}})}catch(e){return}}
+  try{await fetchShifts(iso(g1[0]),iso(g2[41]),true)}catch(e){}
+}
 
-async function api(path,{method='GET',body}={}){
-  if(method!=='GET'&&!navigator.onLine){
-    queueRequest(path,method,body);
-    return {queued:true};
-  }
+/* Действия из очереди сразу видны в данных, пришедших с сервера или из офлайн-копии */
+function noteFromRows(id,rows,ts){
+  const texts=(rows||[]).map(r=>(r.x||'').trim()).filter(Boolean);
+  return {id,title:(texts[0]||'').slice(0,100),preview:(texts[1]||'').slice(0,120),pinned:false,has_check:(rows||[]).some(r=>r.t==='check'),updated_at:Math.floor(ts/1000),deleted_at:null,body:rows,_pending:true};
+}
+function overlay(path,data){
+  const q=getOutbox();if(!q.length||data==null)return data;
+  const p=path.split('?')[0];
+  try{
+    if(p==='/api/get_orders'){
+      let list=[...data];
+      for(const it of q){
+        if(it.path==='/api/add_order')list.unshift({...it.body,id:'q:'+it.id,author_name:it.meta.author||'',_pending:true});
+        const m=it.path.match(/^\/api\/delete_order\/(\d+)$/);if(m)list=list.filter(o=>String(o.id)!==m[1]);
+      }
+      return list;
+    }
+    if(p.startsWith('/api/checklist/')&&data.items){
+      const shift=p.split('/')[3];
+      for(const it of q){
+        if(it.path!=='/api/checklist/toggle'||it.body.shift!==shift)continue;
+        const x=data.items.find(i=>i.id===it.body.item_id);if(!x)continue;
+        if(it.body.sub===-1){x.done=it.body.checked;x.subs=x.subs.map(()=>it.body.checked)}
+        else{x.subs[it.body.sub]=it.body.checked;x.done=x.subs.length>0&&x.subs.every(Boolean)}
+      }
+      return data;
+    }
+    if(p==='/api/notes'){
+      let list=[...data];
+      for(const it of q){
+        if(it.path==='/api/notes'&&it.method==='POST'&&it.meta.tmpId&&!tmpMap[it.meta.tmpId])list.unshift(noteFromRows(it.meta.tmpId,it.body.body,it.ts));
+        let m=it.path.match(/^\/api\/notes\/(\d+)$/);
+        if(m){const n=list.find(x=>String(x.id)===m[1]);if(n){
+          if(it.method==='PUT')Object.assign(n,noteFromRows(n.id,it.body.body,it.ts),{pinned:n.pinned,deleted_at:n.deleted_at});
+          if(it.method==='DELETE')n.deleted_at=Math.floor(it.ts/1000);}}
+        m=it.path.match(/^\/api\/notes\/(\d+)\/(pin|restore|purge)$/);
+        if(m){const n=list.find(x=>String(x.id)===m[1]);if(n){if(m[2]==='pin')n.pinned=it.body.pinned;if(m[2]==='restore')n.deleted_at=null}if(m[2]==='purge')list=list.filter(x=>String(x.id)!==m[1])}
+      }
+      return list;
+    }
+    if(p==='/api/stoplist'){
+      let list=[...data];
+      for(const it of q){
+        if(it.path==='/api/stoplist'&&it.method==='POST'){
+          const nm=(it.meta.name||it.body.name||'').toLowerCase();
+          if(!list.some(s=>it.body.menu_item_id?s.menu_item_id===it.body.menu_item_id:(!s.menu_item_id&&s.name.toLowerCase()===nm)))
+            list.unshift({id:'q:'+it.id,menu_item_id:it.body.menu_item_id||null,name:it.meta.name||it.body.name,note:it.body.note||'',user_name:it.meta.author||'',created_at:Math.floor(it.ts/1000),_pending:true});
+        }
+        let m=it.path.match(/^\/api\/stoplist\/(\d+)$/);if(m)list=list.filter(s=>String(s.id)!==m[1]);
+        m=it.path.match(/^\/api\/stoplist\/menu\/(\d+)$/);if(m)list=list.filter(s=>String(s.menu_item_id)!==m[1]);
+        m=it.path.match(/^\/api\/stoplist\/name\/(.+)$/);if(m){const nm=decodeURIComponent(m[1]).toLowerCase();list=list.filter(s=>s.menu_item_id||s.name.toLowerCase()!==nm)}
+      }
+      return list;
+    }
+    if(p==='/api/announcements'){
+      for(const it of q){const m=it.path.match(/^\/api\/announcements\/(\d+)\/read$/);if(m){const a=data.find(x=>String(x.id)===m[1]);if(a){a.read=true;a.read_at=Math.floor(it.ts/1000)}}}
+      return data;
+    }
+    const cm=p.match(/^\/api\/shame\/(\d+)\/comments$/);
+    if(cm){const list=[...data];for(const it of q)if(it.path===p&&it.method==='POST')list.push({id:'q:'+it.id,user_id:me.id,user_name:me.name,text:it.body.text,created_at:Math.floor(it.ts/1000),_pending:true});return list}
+  }catch(e){console.warn('overlay',e)}
+  return data;
+}
+
+async function api(path,{method='GET',body,meta}={}){
+  if(method!=='GET'&&!navigator.onLine){queueRequest(path,method,body,meta);return {queued:true}}
   let r;
   try{
     r=await fetch(path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body!==undefined?JSON.stringify(body):undefined});
   }catch(networkErr){
-    if(method!=='GET'){queueRequest(path,method,body);return{queued:true}}
+    if(method!=='GET'&&token){queueRequest(path,method,body,meta);return {queued:true}}
     throw new Error('Нет соединения с сервером');
   }
+  if(method==='GET'){const off=r.headers.get('X-Tugai-Offline')==='1';if(off!==offlineData){offlineData=off;updateNetStatus()}}
+  else if([502,503,504].includes(r.status)&&token&&path!=='/api/login'){queueRequest(path,method,body,meta);return {queued:true}}   // сервер перезапускается — отправим позже
   let data=null;try{data=await r.json()}catch(e){}
   if(r.status===401&&token&&path!=='/api/login'){localLogout();throw new Error('Сессия истекла')}
   if(!r.ok)throw new Error(typeof data?.detail==='string'?data.detail:'Проверьте введённые данные');
-  return data;
+  return method==='GET'?overlay(path,data):data;
 }
 async function run(fn){try{return await fn()}catch(e){toast(e.message||'Ошибка');return null}}
 
-/* ---------- AUTH ---------- */
+/* ---------- ВХОД ---------- */
 let regMode=false;
 function toggleAuth(){
   regMode=!regMode;
   $('auth-title').textContent=regMode?'Регистрация':'Вход';
-  $('auth-sub').textContent=regMode?'После регистрации аккаунт должен подтвердить администратор.':'Войдите, чтобы открыть рабочее пространство.';
+  $('auth-sub').textContent=regMode?'После регистрации аккаунт должен подтвердить администратор.':'Войдите, чтобы открыть рабочее пространство бара.';
   $('a-name').style.display=regMode?'block':'none';
   $('a-btn').textContent=regMode?'Отправить заявку':'Войти';
   $('a-toggle').textContent=regMode?'Уже есть аккаунт? Войти':'Нет аккаунта? Зарегистрироваться';
@@ -852,6 +1158,7 @@ function toggleAuth(){
 async function submitAuth(){
   const username=$('a-user').value.trim(),password=$('a-pass').value,name=$('a-name').value.trim();
   $('a-err').className='err';$('a-err').textContent='';
+  if(!navigator.onLine){$('a-err').textContent='Для входа нужен интернет';return}
   try{
     if(regMode){
       await api('/api/register',{method:'POST',body:{username,name,password}});
@@ -859,16 +1166,30 @@ async function submitAuth(){
       $('a-pass').value='';
     }else{
       const r=await api('/api/login',{method:'POST',body:{username,password}});
-      token=r.token;localStorage.setItem('tugai_token',token);me=r.user;$('a-pass').value='';enter();
+      token=r.token;localStorage.setItem('tugai_token',token);me=r.user;localStorage.setItem('tugai_me',JSON.stringify(me));$('a-pass').value='';enter();
     }
   }catch(e){$('a-err').textContent=e.message}
 }
-function localLogout(){token=null;me=null;localStorage.removeItem('tugai_token');clearInterval(ordersTimer);closeSheet();closeLightbox();$('app').classList.add('hidden');$('auth').classList.remove('hidden')}
+function localLogout(){
+  token=null;me=null;['tugai_token','tugai_me',OUTBOX_KEY,'tugai_shifts','tugai_draft'].forEach(k=>localStorage.removeItem(k));
+  clearInterval(ordersTimer);closeSheet();closeLightbox();
+  if(navigator.serviceWorker&&navigator.serviceWorker.controller)navigator.serviceWorker.controller.postMessage({type:'clear-data'});
+  try{caches.delete('tugai-api')}catch(e){}
+  if(navigator.clearAppBadge)navigator.clearAppBadge().catch(()=>{});
+  $('app').classList.add('hidden');$('auth').classList.remove('hidden');
+}
 async function logout(){if(!await askConfirm('Выйти из аккаунта?',`Вы вошли как ${me.name}.`,'Выйти',true))return;closeSheet();try{await api('/api/logout',{method:'POST'})}catch(e){}localLogout()}
 
 async function boot(){
-  updateNetStatus();
-  if(token){try{me=await api('/api/me');enter();return}catch(e){}}
+  updateNetStatus();loadPendingUploads();
+  if(token){
+    try{me=await api('/api/me');localStorage.setItem('tugai_me',JSON.stringify(me));return enter()}
+    catch(e){
+      // Нет сети — входим по сохранённому профилю, всё остальное подтянется из офлайн-копии.
+      const saved=(()=>{try{return JSON.parse(localStorage.getItem('tugai_me')||'null')}catch(x){return null}})();
+      if(token&&saved){me=saved;return enter()}
+    }
+  }
   $('auth').classList.remove('hidden');
 }
 async function enter(){
@@ -878,15 +1199,23 @@ async function enter(){
   document.querySelectorAll('.edit-only').forEach(e=>e.classList.toggle('hidden',!canEdit()));
   document.querySelectorAll('.admin-only').forEach(e=>e.classList.toggle('hidden',!isAdmin()));
   document.querySelectorAll('.not-waiter-only').forEach(e=>e.classList.toggle('hidden',!notWaiter()));
-  await run(async()=>{menu=await api('/api/menu')});
+  const [m,st]=await Promise.all([run(()=>api('/api/menu')),api('/api/stoplist').catch(()=>null)]);
+  if(m)menu=m;if(st)stopList=st;
   if(isAdmin())refreshPending();
   const h=location.hash.slice(1);
   go(TABS.includes(h)&&(h!=='team'||canEdit())?h:'drinks');
-  clearInterval(ordersTimer);ordersTimer=setInterval(()=>{if(tab==='orders')fetchOrders()},5000);
-  initPush();
+  clearInterval(ordersTimer);
+  ordersTimer=setInterval(()=>{if(document.hidden||!navigator.onLine)return;if(tab==='orders')fetchOrders();pollTick++;if(pollTick%12===0){refreshUnread();if(tab==='drinks'||tab==='pf')loadStop()}},5000);
+  refreshUnread();initPush();flushOutbox();setTimeout(warmCache,1500);
 }
+let pollTick=0;
 
-/* ---------- PUSH-УВЕДОМЛЕНИЯ ---------- */
+/* ---------- PUSH-УВЕДОМЛЕНИЯ ----------
+   iPhone: работают только в приложении, добавленном на экран «Домой» (iOS 16.4+).
+   Разрешение запрашивается ПЕРВЫМ действием по нажатию — иначе iOS молча отказывает. */
+const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const isStandalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+let pushState={supported:false,on:false,reason:'',key:null,perm:'default'};
 function urlB64ToUint8Array(base64String){
   const padding='='.repeat((4-base64String.length%4)%4);
   const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
@@ -895,50 +1224,80 @@ function urlB64ToUint8Array(base64String){
   return arr;
 }
 async function initPush(){
-  if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
+  if(isIOS&&!isStandalone()){pushState={...pushState,supported:false,on:false,reason:'ios-browser'};return renderPushRow()}
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){pushState={...pushState,supported:false,on:false,reason:'unsupported'};return renderPushRow()}
+  try{const r=await api('/api/push/public_key');pushState.key=r&&r.key||null}catch(e){}
   try{
     const reg=await navigator.serviceWorker.ready;
     const sub=await reg.pushManager.getSubscription();
-    pushState={supported:true,on:!!sub};
-  }catch(e){pushState={supported:false,on:false}}
-  const sw=$('acc-push');if(sw){sw.classList.toggle('on',pushState.on);sw.setAttribute('aria-checked',pushState.on)}
+    pushState={...pushState,supported:true,perm:Notification.permission,on:!!sub&&Notification.permission==='granted',reason:pushState.key?'':'server'};
+    // Подписка есть на телефоне — напоминаем о ней серверу (на случай переустановки базы или смены пользователя).
+    if(sub&&Notification.permission==='granted'&&navigator.onLine){const j=sub.toJSON();fetch('/api/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({endpoint:j.endpoint,keys:j.keys})}).catch(()=>{})}
+  }catch(e){pushState={...pushState,supported:false,on:false,reason:'unsupported'}}
+  renderPushRow();
 }
-async function togglePush(){
-  if(!('serviceWorker' in navigator)||!('PushManager' in window)){toast('Браузер не поддерживает push-уведомления');return}
-  const reg=await navigator.serviceWorker.ready;
-  const existing=await reg.pushManager.getSubscription();
-  if(existing){
-    await run(()=>api('/api/push/unsubscribe',{method:'POST',body:{endpoint:existing.endpoint}}));
-    await existing.unsubscribe();
-    toast('Уведомления выключены');
-    return initPush();
-  }
-  if(Notification.permission==='denied'){toast('Уведомления заблокированы в настройках браузера');return}
-  const perm=await Notification.requestPermission();
-  if(perm!=='granted'){toast('Уведомления не разрешены');return}
-  const {key}=await run(()=>api('/api/push/public_key'))||{};
-  if(!key){toast('Push пока не настроен на сервере');return}
+function togglePush(){
+  if(!pushState.supported)return;
+  if(pushState.on)return disablePush();
+  if(!pushState.key){toast('Push не настроен на сервере: нет ключей VAPID');return}
+  // Никаких await до этой строки — важно для Safari/iOS.
+  const permP=Notification.permission==='granted'?Promise.resolve('granted'):Notification.requestPermission();
+  enablePush(permP);
+}
+async function enablePush(permP){
+  const sw=$('acc-push');if(sw)sw.classList.add('busy');
   try{
-    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToUint8Array(key)});
+    const perm=await permP;pushState.perm=perm;
+    if(perm!=='granted'){toast(perm==='denied'?'Уведомления запрещены. Включите их: Настройки → Уведомления → Тугай':'Уведомления не разрешены');return}
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToUint8Array(pushState.key)});
     const j=sub.toJSON();
-    await run(()=>api('/api/push/subscribe',{method:'POST',body:{endpoint:j.endpoint,keys:j.keys}}));
-    toast('Уведомления включены');
-  }catch(e){toast('Не удалось включить уведомления')}
-  initPush();
+    await api('/api/push/subscribe',{method:'POST',body:{endpoint:j.endpoint,keys:j.keys}});
+    pushState.on=true;toast('Уведомления включены');
+  }catch(e){toast('Не удалось включить уведомления: '+(e.message||e))}
+  finally{if(sw)sw.classList.remove('busy');renderPushRow()}
+}
+async function disablePush(){
+  try{
+    const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();
+    if(sub){await api('/api/push/unsubscribe',{method:'POST',body:{endpoint:sub.endpoint}}).catch(()=>{});await sub.unsubscribe()}
+    pushState.on=false;toast('Уведомления выключены');
+  }catch(e){toast('Не удалось выключить уведомления')}
+  renderPushRow();
+}
+function pushRowHtml(){
+  if(pushState.reason==='ios-browser')return `<div class="acc-note"><b>Как включить уведомления на iPhone</b>
+    <ol><li>Откройте сайт в Safari и нажмите «Поделиться» <span class="kbd">⬆︎</span></li><li>Выберите «На экран “Домой”»</li><li>Запустите «Тугай» с иконки на экране «Домой»</li><li>Откройте это меню и включите «Уведомления»</li></ol>
+    <span class="muted">В обычной вкладке Safari Apple не разрешает веб-уведомления.</span></div>`;
+  if(pushState.reason==='unsupported')return `<div class="acc-note">Этот браузер не поддерживает уведомления.</div>`;
+  return `<div class="acc-group">
+    <div class="acc-row"><span class="lbl"><span class="ib" style="background:#ff3b30">${ic('bell',17)}</span>Уведомления</span>
+      <button class="switch ${pushState.on?'on':''}" id="acc-push" role="switch" aria-checked="${pushState.on}" onclick="togglePush()" aria-label="Уведомления"></button></div>
+    ${pushState.on?`<button class="acc-row acc-btn" onclick="testPush()"><span class="lbl"><span class="ib" style="background:#34c759">${ic('send',17)}</span>Проверить — прислать тестовое</span>${ic('chevR',16)}</button>`:''}
+  </div>${pushState.reason==='server'?`<div class="acc-note warn">На сервере не заданы ключи VAPID — уведомления не отправляются.</div>`:''}
+  ${pushState.perm==='denied'?`<div class="acc-note warn">Уведомления запрещены в настройках устройства: Настройки → Уведомления → Тугай.</div>`:''}`;
+}
+function renderPushRow(){const el=$('acc-push-box');if(el)el.innerHTML=pushRowHtml()}
+async function testPush(){
+  const r=await run(()=>api('/api/push/test',{method:'POST'}));if(!r||r.queued)return;
+  let title,msg;
+  if(!r.configured){title='Сервер не настроен';msg='Задайте VAPID_PUBLIC_KEY и VAPID_PRIVATE_KEY в переменных окружения.'}
+  else if(!r.devices){title='Устройство не подписано';msg='Выключите и снова включите «Уведомления».'}
+  else if(r.sent){title='Отправлено ✓';msg=`Уведомление ушло на ${r.devices} ${plural(r.devices,'устройство','устройства','устройств')}. Если оно не появилось — проверьте Настройки → Уведомления → Тугай и режим «Фокус».`+(r.claims_ok?'':' На сервере лучше указать VAPID_CLAIMS_EMAIL=mailto:ваш@адрес.')}
+  else{
+    const e=r.errors[0]||{};title='Не доставлено';
+    msg=`${e.host||'Сервис'} ответил ${e.status||'ошибкой'}: ${e.detail||''}`;
+    if(e.status===403||/BadJwtToken|VapidPkHash|jwt/i.test(e.detail||''))msg+='\n\nApple отклонил ключ. Укажите VAPID_CLAIMS_EMAIL=mailto:ваш_реальный@адрес и проверьте, что VAPID_PUBLIC_KEY и VAPID_PRIVATE_KEY — пара от одного ключа. Потом выключите и включите уведомления.';
+    if(e.status===410||e.status===404)msg+='\n\nПодписка устарела — включите уведомления заново.';
+  }
+  await askConfirm(title,msg,'Понятно');
 }
 
-/* ---------- NAV ---------- */
+/* ---------- НАВИГАЦИЯ ---------- */
 document.getElementById('tabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(b)go(b.dataset.t)});
 document.getElementById('filters').addEventListener('click',e=>{const p=e.target.closest('.pill');if(!p)return;filter=p.dataset.f;document.querySelectorAll('#filters .pill').forEach(x=>x.classList.toggle('on',x===p));renderCards()});
-document.getElementById('sch-seg').addEventListener('click',e=>{
-  const b=e.target.closest('button');if(!b)return;
-  schView=b.dataset.s;
-  document.querySelectorAll('#sch-seg button').forEach(x=>x.classList.toggle('on',x===b));
-  $('sch-month').classList.toggle('hidden',schView!=='month');
-  $('sch-week').classList.toggle('hidden',schView!=='week');
-  $('sch-history').classList.toggle('hidden',schView!=='history');
-  if(schView==='month')loadMonth();else if(schView==='week')loadWeek();else loadHistory();
-});
+document.getElementById('sch-seg').addEventListener('click',e=>{const b=e.target.closest('button');if(b)setSchView(b.dataset.s)});
 document.getElementById('cl-shift-seg').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   clShift=b.dataset.v;localStorage.setItem('tugai_cl_shift',clShift);
@@ -952,29 +1311,44 @@ document.getElementById('cl-detail-seg').addEventListener('click',e=>{
   renderChecklist();
 });
 
-const TABS=['drinks','pf','checklist','photos','shame','orders','schedule','notes','team'];
+const TABS=['drinks','pf','news','checklist','photos','shame','orders','schedule','notes','team'];
 function go(t){
   tab=t;
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
   const act=document.querySelector(`.tab[data-t="${t}"]`);if(act)act.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
   if(location.hash.slice(1)!==t)history.replaceState(null,'','#'+t);
+  applyGlow();
   const v=(t==='drinks'||t==='pf')?'cards':t;
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   if(v==='cards'){
     $('cards-title').textContent=t==='pf'?'Заготовки':'Напитки';
     $('cards-sub').textContent=t==='pf'?'Полуфабрикаты с калькулятором выхода.':'Технологические карты бара.';
-    $('filters').classList.toggle('hidden',t!=='drinks');renderCards();
+    $('filters').classList.toggle('hidden',t!=='drinks');renderStopBanner();renderCards();loadStop();
   }
-  if(t==='schedule'){ensureStaff();({month:loadMonth,week:loadWeek,history:loadHistory})[schView]()}
+  if(t==='schedule'){ensureStaff().then(()=>setSchView(schView))}
   if(t==='orders')fetchOrders();
   if(t==='checklist')loadChecklist();
   if(t==='photos')loadPhotos();
   if(t==='shame')loadShame();
   if(t==='notes')loadNotes();
+  if(t==='news')loadNews();
   if(t==='team')loadTeam();
   window.scrollTo({top:0});
 }
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(me&&TABS.includes(h)&&h!==tab&&(h!=='team'||canEdit()))go(h)});
+
+/* ---------- ЖИВОЙ ФОН: мягкое свечение, цвет плавно меняется от вкладки к вкладке ---------- */
+const TAB_GLOW={drinks:['#0a84ff','#64d2ff','#0066cc','#2997ff'],pf:['#30b0c7','#34c759','#0b7285','#40c8e0'],news:['#5e5ce6','#0a84ff','#4b49c8','#7d7aff'],
+  checklist:['#30d158','#64d2ff','#1d8a3a','#30d158'],photos:['#5856d6','#0a84ff','#4b49c8','#7d7aff'],shame:['#ff375f','#ff9f0a','#d70015','#ff6482'],
+  orders:['#ff9f0a','#ffd60a','#b64400','#ff9f0a'],schedule:['#bf5af2','#5e5ce6','#8944ab','#da8fff'],notes:['#ffd60a','#ff9f0a','#a05a00','#ffd60a'],team:['#64d2ff','#8e8e93','#0071a4','#64d2ff']};
+const isDark=()=>{const t=document.documentElement.getAttribute('data-theme');return t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches};
+function hexA(h,a){const n=parseInt(h.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`}
+function applyGlow(){
+  const g=TAB_GLOW[tab]||TAB_GLOW.drinks,d=isDark(),s=document.documentElement.style;
+  s.setProperty('--g1',hexA(g[0],d?.46:.30));s.setProperty('--g2',hexA(g[1],d?.32:.22));s.setProperty('--tab-accent',d?g[3]:g[2]);
+  const mt=document.querySelectorAll('meta[name="theme-color"]');mt.forEach(m=>m.setAttribute('content',d?'#0b0b10':'#f5f5f7'));
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',applyGlow);
 
 /* ---------- ТТК ---------- */
 function toggleCard(el){el.classList.toggle('open')}
@@ -986,12 +1360,16 @@ function renderCards(){
   const q=$('search').value.toLowerCase(),box=$('cards');
   const list=menu.filter(i=>{
     if(i.tab!==tab)return false;
-    if(tab==='drinks'&&filter!=='all'&&i.category!==filter)return false;
+    if(tab==='drinks'&&filter==='stop'&&!stopFor(i.id))return false;
+    if(tab==='drinks'&&filter!=='all'&&filter!=='stop'&&i.category!==filter)return false;
     const s=(i.title+' '+(i.ingredients||[]).join(' ')+' '+(i.calcIngredients||[]).map(x=>x.name).join(' ')).toLowerCase();
     return s.includes(q);
   });
-  if(!list.length){box.innerHTML='<div class="empty" style="grid-column:1/-1">Ничего не найдено. Попробуйте другой запрос.</div>';return}
+  const sp=document.querySelector('#filters .pill[data-f="stop"]');
+  if(sp){const n=menu.filter(i=>i.tab==='drinks'&&stopFor(i.id)).length;sp.innerHTML=`Стоп-лист${n?` <span class="pill-count">${n}</span>`:''}`}
+  if(!list.length){box.innerHTML=`<div class="empty" style="grid-column:1/-1">${filter==='stop'?'В стоп-листе нет напитков — всё в наличии.':'Ничего не найдено. Попробуйте другой запрос.'}</div>`;return}
   box.innerHTML=list.map(i=>{
+    const st=stopFor(i.id);
     let tags=(i.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
     if(i.glass)tags+=`<span class="tag glass">${esc(i.glass)}</span>`;
     const calc=i.calcIngredients&&i.calcIngredients.length;
@@ -999,60 +1377,303 @@ function renderCards(){
       <div class="method">${esc(i.method)}</div>
       <ul>${i.calcIngredients.map(g=>`<li>${esc(g.name)} — <span class="ing-val ia-${i.id}" data-b="${g.amount}">${g.amount}</span> ${esc(g.unit)}</li>`).join('')}</ul>`
       :`<div class="method">${esc(i.method)}</div><ul>${(i.ingredients||[]).map(g=>`<li>${esc(g)}</li>`).join('')}</ul>`;
-    return `<div class="card" onclick="toggleCard(this)"><div class="card-head"><h3 class="card-title">${esc(i.title)}</h3><span class="chev">${ic('chevD',18)}</span></div>
-      <div class="card-body"><div>${tags?`<div class="tags">${tags}</div>`:''}${body}</div></div></div>`;
+    const stopBtn=notWaiter()?`<div class="card-foot" onclick="event.stopPropagation()">${st
+      ?`<button class="btn sm" onclick="removeStop(${JSON.stringify(st.id).replace(/"/g,'&quot;')})">${ic('check',15)}Снова в наличии</button>`
+      :`<button class="btn sm danger" onclick="stopMenuItem(${i.id})">${ic('stop',15)}В стоп-лист</button>`}</div>`:'';
+    return `<div class="card ${st?'stopped':''}" onclick="toggleCard(this)"><div class="card-head"><h3 class="card-title">${esc(i.title)}${st?` <span class="stop-badge">Стоп</span>`:''}</h3><span class="chev">${ic('chevD',18)}</span></div>
+      ${st&&st.note?`<div class="stop-note">${esc(st.note)}</div>`:''}
+      <div class="card-body"><div>${tags?`<div class="tags">${tags}</div>`:''}${body}${stopBtn}</div></div></div>`;
   }).join('');
 }
 
-/* ---------- ГРАФИК ---------- */
+/* ---------- СТОП-ЛИСТ ---------- */
+let stopList=[];
+const stopFor=id=>stopList.find(s=>s.menu_item_id===id);
+async function loadStop(){
+  try{const r=await api('/api/stoplist');stopList=r;renderStopBanner();if(tab==='drinks'||tab==='pf')renderCards()}catch(e){}
+}
+function renderStopBanner(){
+  const el=$('stop-banner');if(!el)return;
+  const n=stopList.length;
+  if(!n){
+    el.className='stop-banner ok';
+    el.innerHTML=`<span class="sb-ic ok">${ic('check',18)}</span><div class="sb-t"><b>Стоп-лист пуст</b><span>Всё в наличии</span></div>${notWaiter()?`<button class="btn sm" onclick="openStopAdd()">${ic('plus',15)}Добавить</button>`:''}`;
+    return;
+  }
+  el.className='stop-banner';
+  el.innerHTML=`<div class="sb-head"><span class="sb-ic">${ic('stop',22)}</span><div class="sb-t"><b>Стоп-лист · ${n}</b><span>Эти позиции сейчас нельзя продавать</span></div>
+      ${notWaiter()?`<button class="btn sm sb-add" onclick="openStopAdd()">${ic('plus',15)}Добавить</button>`:''}</div>
+    <div class="sb-chips">${stopList.map((s,i)=>`<button class="sb-chip ${s._pending?'pending':''}" onclick="openStopItem(${i})">${esc(s.name)}${s.note?`<small>${esc(s.note)}</small>`:''}${s._pending?`<small>ждёт отправки</small>`:''}</button>`).join('')}</div>`;
+}
+function openStopItem(i){
+  const s=stopList[i];if(!s)return;
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
+    <span class="stop-badge" style="margin-bottom:10px;display:inline-block">Стоп</span><h2>${esc(s.name)}</h2>
+    ${s.note?`<p style="font-size:17px;margin:8px 0 0">${esc(s.note)}</p>`:''}
+    <p class="sub">${s.user_name?`${esc(s.user_name)} · `:''}${esc(fmtShameDate(s.created_at))}</p>
+    <div class="actions">${notWaiter()?`<button class="btn primary" onclick="removeStop(${JSON.stringify(s.id).replace(/"/g,'&quot;')});closeSheet()">${ic('check',17)}Снова в наличии</button>`:''}
+      <button class="btn" onclick="stopToOrder(${i})">${ic('plus',17)}В заявку на закупку</button></div>`;
+  $('ov').classList.add('on');
+}
+function stopToOrder(i){
+  const s=stopList[i];closeSheet();go('orders');
+  setTimeout(()=>{$('o-name').value=s.name;$('o-comment').value=s.note?`стоп-лист: ${s.note}`:'стоп-лист';$('o-qty').focus()},250);
+}
+let stopPick=null;
+function openStopAdd(){
+  stopPick=null;
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
+    <h2>В стоп-лист</h2><p class="sub">Найдите позицию меню или впишите, что закончилось.</p>
+    <input class="field" id="st-q" placeholder="Например, Апероль или мята" style="margin-top:18px" oninput="stopSuggest()" autocomplete="off">
+    <div class="st-list" id="st-list"></div>
+    <label class="lb">Причина</label>
+    <div class="chips" id="st-reasons" style="margin-bottom:10px">${['Закончилось','До вечера','Нет ингредиента','До поставки'].map(t=>`<button type="button" class="chip-btn" onclick="stopReason(this)">${t}</button>`).join('')}</div>
+    <input class="field" id="st-note" placeholder="Своя причина (необязательно)" maxlength="200" oninput="document.querySelectorAll('#st-reasons .chip-btn').forEach(x=>x.classList.toggle('on',x.textContent===this.value))">
+    <div class="actions"><button class="btn primary" id="st-save" onclick="saveStop()" disabled>${ic('stop',17)}Поставить в стоп</button></div>`;
+  $('ov').classList.add('on');stopSuggest();
+  if(matchMedia('(hover:hover)').matches)setTimeout(()=>{if(!document.activeElement||document.activeElement===document.body)$('st-q').focus()},60);
+}
+function stopReason(el){const on=!el.classList.contains('on');document.querySelectorAll('#st-reasons .chip-btn').forEach(x=>x.classList.remove('on'));el.classList.toggle('on',on);$('st-note').value=on?el.textContent:''}
+function stopSuggest(){
+  const q=$('st-q').value.trim().toLowerCase();
+  const found=menu.filter(i=>!stopFor(i.id)&&(!q||i.title.toLowerCase().includes(q))).slice(0,q?8:6);
+  $('st-list').innerHTML=found.map(i=>`<button class="st-item ${stopPick===i.id?'on':''}" onclick="stopPick=${i.id};$('st-q').value=${JSON.stringify(i.title).replace(/"/g,'&quot;')};stopSuggest()"><span>${esc(i.title)}</span><small>${i.tab==='pf'?'ПФ':'Напиток'}</small></button>`).join('')
+    +(q&&!menu.some(i=>i.title.toLowerCase()===q)?`<button class="st-item ${stopPick===null?'on':''}" onclick="stopPick=null;stopSuggest()"><span>«${esc($('st-q').value.trim())}»</span><small>своя позиция</small></button>`:'');
+  if(stopPick&&!menu.some(i=>i.id===stopPick&&i.title.toLowerCase()===q))stopPick=null;
+  $('st-save').disabled=!q;
+}
+async function saveStop(){
+  const name=$('st-q').value.trim(),note=$('st-note').value.trim();if(!name)return;
+  const m=stopPick?menu.find(i=>i.id===stopPick):menu.find(i=>i.title.toLowerCase()===name.toLowerCase());
+  closeSheet();await addStop(m?{menu_item_id:m.id,name:m.title,note}:{name,note});
+}
+function stopMenuItem(id){const m=menu.find(i=>i.id===id);if(m)addStop({menu_item_id:id,name:m.title,note:''})}
+async function addStop({menu_item_id,name,note}){
+  const r=await run(()=>api('/api/stoplist',{method:'POST',body:{menu_item_id:menu_item_id||null,name:menu_item_id?'':name,note:note||''},meta:{name,author:me.name}}));
+  if(!r)return;
+  toast(r.queued?`⛔ ${name} — в стоп-листе (отправим, когда будет сеть)`:`⛔ ${name} — в стоп-листе`);
+  if(r.queued){stopList=overlay('/api/stoplist',stopList.filter(s=>!s._pending));renderStopBanner();renderCards()}else loadStop();
+}
+async function removeStop(id){
+  const s=stopList.find(x=>x.id===id);if(!s)return;
+  if(s._pending){dropQueued(x=>'q:'+x.id===id);stopList=stopList.filter(x=>x.id!==id);renderStopBanner();renderCards();return}
+  const path=s.menu_item_id?`/api/stoplist/menu/${s.menu_item_id}`:`/api/stoplist/${s.id}`;
+  const r=await run(()=>api(path,{method:'DELETE'}));if(!r)return;
+  toast(`✅ ${s.name} — снова в наличии`);
+  stopList=stopList.filter(x=>x.id!==id);renderStopBanner();renderCards();
+  if(!r.queued)loadStop();
+}
+
+/* ---------- ГРАФИК ----------
+   Неделя — таблица «сотрудники × дни». Руководитель выбирает «кисть» (День / Ночь / Полдень / своё время / Выходной)
+   и просто нажимает на клетки; изменения копятся в черновике и сохраняются одной кнопкой (одно уведомление каждому). */
 const hoursOf=s=>{const t=x=>+x.slice(0,2)*60+ +x.slice(3);let d=t(s.end)-t(s.start);if(d<=0)d+=1440;return d/60};
+const SHIFT_STORE='tugai_shifts';
+let shiftStore=(()=>{try{return JSON.parse(localStorage.getItem(SHIFT_STORE)||'{}')}catch(e){return{}}})();
+function saveShiftStore(){
+  const cut=iso(addDays(new Date(),-150));
+  for(const id in shiftStore)if(shiftStore[id].date<cut)delete shiftStore[id];
+  try{localStorage.setItem(SHIFT_STORE,JSON.stringify(shiftStore))}catch(e){}
+}
+const hasPendingBulk=()=>getOutbox().some(x=>x.path==='/api/schedule/bulk');
+async function fetchShifts(a,b,silent){
+  try{
+    const r=await api(`/api/schedule?start=${a}&end=${b}`);
+    const keepTmp=hasPendingBulk();
+    for(const id in shiftStore){const s=shiftStore[id];if(s.date>=a&&s.date<=b&&(!isTmp(id)||!keepTmp))delete shiftStore[id]}
+    r.forEach(s=>{shiftStore[s.id]=s});
+    if(keepTmp)reapplyPendingOps(a,b);
+    saveShiftStore();
+  }catch(e){if(!silent&&!Object.keys(shiftStore).length)toast(e.message)}
+  return Object.values(shiftStore).filter(s=>s.date>=a&&s.date<=b).sort((x,y)=>(x.date+x.start).localeCompare(y.date+y.start));
+}
+function staffName(uid){const u=staffList.find(x=>x.id===uid);return u?u.name:'Сотрудник'}
+function staffRole(uid){const u=staffList.find(x=>x.id===uid);return u?u.role:''}
+function applyOpsLocal(ops){
+  for(const o of ops){
+    if(o.op==='delete'){delete shiftStore[o.id];continue}
+    if(o.op==='set'||o.op==='clear')for(const id in shiftStore){const s=shiftStore[id];if(s.user_id===o.user_id&&s.date===o.date)delete shiftStore[id]}
+    if(o.op==='set'||o.op==='add'){const id=newTmp();shiftStore[id]={id,date:o.date,user_id:o.user_id,user_name:staffName(o.user_id),role:staffRole(o.user_id),start:o.start,end:o.end,note:o.note||'',_pending:true}}
+  }
+  saveShiftStore();
+}
+function reapplyPendingOps(a,b){
+  for(const it of getOutbox())if(it.path==='/api/schedule/bulk')applyOpsLocal(it.body.ops.filter(o=>o.op==='delete'||(o.date>=a&&o.date<=b)));
+}
+async function saveOps(ops,okMsg){
+  if(!ops.length)return true;
+  const r=await run(()=>api('/api/schedule/bulk',{method:'POST',body:{ops}}));
+  if(!r)return false;
+  if(r.queued){applyOpsLocal(ops);toast('Нет сети — график сохранён на телефоне и отправится сам')}
+  else toast(okMsg||`Сохранено: +${r.added} / −${r.removed}`);
+  await reloadSchedule();return true;
+}
+
+let schView=localStorage.getItem('tugai_sch_view')||'week',weekStart=monday(new Date()),schMonth=new Date(),shifts=[],swapFrom=null;
+let brush=null;                       // null — просмотр; 'erase' — выходной; {start,end,label,cls}
+const draft=new Map(((()=>{try{return JSON.parse(localStorage.getItem('tugai_draft')||'[]')}catch(e){return[]}})()));
+function saveDraft(){try{localStorage.setItem('tugai_draft',JSON.stringify([...draft]))}catch(e){}renderDraftBar()}
+const BRUSHES=[{k:'day',label:'День',start:'08:00',end:'20:00'},{k:'night',label:'Ночь',start:'20:00',end:'08:00'},{k:'noon',label:'Полдень',start:'12:00',end:'00:00'}];
+let customBrush=JSON.parse(localStorage.getItem('tugai_brush_custom')||'null');
+function presetCls(s){const b=BRUSHES.find(x=>x.start===s.start&&x.end===s.end);return b?'p-'+b.k:'p-other'}
+const shortT=t=>t.endsWith(':00')?t.slice(0,2):t;
+function setSchView(v){
+  schView=v;localStorage.setItem('tugai_sch_view',v);
+  document.querySelectorAll('#sch-seg button').forEach(x=>x.classList.toggle('on',x.dataset.s===v));
+  ['week','month','mine','history'].forEach(k=>$('sch-'+k).classList.toggle('hidden',k!==v));
+  reloadSchedule();
+}
+function reloadSchedule(){({week:loadWeek,month:loadMonth,mine:loadMine,history:loadHistory})[schView]()}
 async function loadWeek(){
-  const a=iso(weekStart),b=iso(addDays(weekStart,6));
   const e=addDays(weekStart,6),same=weekStart.getMonth()===e.getMonth();
-  $('wk-label').textContent=same?`${weekStart.getDate()} – ${e.getDate()} ${MONTHS[e.getMonth()]}`:`${weekStart.getDate()} ${MONTHS[weekStart.getMonth()]} – ${e.getDate()} ${MONTHS[e.getMonth()]}`;
-  const r=await run(()=>api(`/api/schedule?start=${a}&end=${b}`));
-  if(r){shifts=r;renderWeek()}
+  $('wk-label').textContent=same?`${weekStart.getDate()} – ${e.getDate()} ${MONTHS[e.getMonth()]}`:`${weekStart.getDate()} ${MONTHS[weekStart.getMonth()].slice(0,3)} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0,3)}`;
+  const today=new Date();
+  shifts=await fetchShifts(iso(addDays(weekStart,-1)),iso(e));
+  if(iso(weekStart)>iso(today)||iso(e)<iso(today))await fetchShifts(iso(addDays(today,-1)),iso(today),true);
+  renderBrushbar();renderRoster();renderNowStrip();renderDraftBar();
 }
 function shiftWeek(n){weekStart=addDays(weekStart,7*n);loadWeek()}
-function renderWeek(){
-  const today=iso(new Date());
-  $('week').innerHTML=DAYS.map((n,i)=>{
-    const d=addDays(weekStart,i),k=iso(d),list=shifts.filter(s=>s.date===k);
-    return `<div class="day ${k===today?'today':''}"><div class="day-h"><b>${n}</b><span class="n">${d.getDate()}</span></div>
-      ${list.map(s=>`<div class="shift r-${s.role} ${s.user_id===me.id?'me':''} ${swapFrom===s.id?'pick':''}" onclick="clickShift(${s.id})"><b>${esc(s.user_name)}</b>${s.start}–${s.end}${s.note?`<small>${esc(s.note)}</small>`:''}</div>`).join('')||'<span class="muted" style="font-size:13px">Нет смен</span>'}
-      ${canEdit()?`<button class="addbtn" style="margin-top:auto;align-self:flex-start" onclick="openShift(null,'${k}')" aria-label="Добавить смену">${ic('plus',16)}</button>`:''}</div>`;
-  }).join('');
-  const tot={};shifts.forEach(s=>{tot[s.user_name]=(tot[s.user_name]||0)+hoursOf(s)});
-  const names=Object.keys(tot).sort();
-  $('hours').innerHTML=names.length?names.map(n=>`<div class="row"><span>${esc(n)}</span><b>${+tot[n].toFixed(1)} ч</b></div>`).join(''):'<div class="row muted">Смен на этой неделе нет</div>';
+function rosterPeople(){
+  const ids=new Set(staffList.filter(u=>u.role!=='master').map(u=>u.id));
+  shifts.forEach(s=>ids.add(s.user_id));
+  const order={senior_bartender:0,bar_manager:1,bartender:2,waiter:3};
+  const people=[...ids].map(id=>{const u=staffList.find(x=>x.id===id);return {id,name:u?u.name:(shifts.find(s=>s.user_id===id)||{}).user_name||'Удалённый',role:u?u.role:''}});
+  return people.sort((a,b)=>(a.id===me.id?-1:b.id===me.id?1:0)||((order[a.role]??5)-(order[b.role]??5))||a.name.localeCompare(b.name,'ru'));
 }
-function clickShift(id){
+function cellShifts(uid,date){
+  const d=draft.get(uid+'|'+date);
+  if(d)return d.op==='clear'?[]:[{id:null,date,user_id:uid,start:d.start,end:d.end,note:d.note||'',_draft:true}];
+  return shifts.filter(s=>s.user_id===uid&&s.date===date);
+}
+function renderRoster(){
+  const days=Array.from({length:7},(_,i)=>addDays(weekStart,i)),todayK=iso(new Date()),people=rosterPeople(),edit=canEdit();
+  const groups=[['Бар',people.filter(p=>p.role!=='waiter')],['Зал',people.filter(p=>p.role==='waiter')]].filter(g=>g[1].length);
+  const head=`<thead><tr><th class="rs-name">Сотрудник</th>${days.map((d,i)=>`<th class="${iso(d)===todayK?'today':''}"><span>${DAYS[i]}</span><b>${d.getDate()}</b></th>`).join('')}<th class="rs-h">Часы</th></tr></thead>`;
+  const rows=groups.map(([title,list])=>`<tr class="rs-group"><td colspan="9"><span>${title}</span></td></tr>`+list.map(p=>{
+    let hours=0;
+    const cells=days.map(d=>{
+      const k=iso(d),list=cellShifts(p.id,k);list.forEach(s=>hours+=hoursOf(s));
+      const dr=draft.has(p.id+'|'+k);
+      const inner=list.length?list.map(s=>`<div class="sh ${presetCls(s)} ${s._pending?'pending':''} ${swapFrom&&swapFrom===s.id?'pick':''}" title="${esc(s.start+'–'+s.end+(s.note?' · '+s.note:''))}">${shortT(s.start)}–${shortT(s.end)}${s.note?'<i class="dot"></i>':''}</div>`).join('')
+        :(edit?`<span class="rs-plus">+</span>`:'');
+      return `<td class="rs-cell ${k===todayK?'today':''} ${dr?'draft':''} ${list.length?'':'empty'}" onclick="cellTap(${p.id},'${k}')">${inner}</td>`;
+    }).join('');
+    return `<tr class="${p.id===me.id?'me':''}"><th class="rs-name"><div>${avatar(p.name,'xs')}<span><b>${esc(p.name)}</b><small>${esc(ROLES[p.role]||'')}</small></span></div></th>${cells}<td class="rs-h">${hours?+hours.toFixed(1):'—'}</td></tr>`;
+  }).join('')).join('');
+  const counts=days.map(d=>{const k=iso(d);return `<td class="${k===todayK?'today':''}">${people.reduce((n,p)=>n+(cellShifts(p.id,k).length?1:0),0)||'—'}</td>`}).join('');
+  $('roster').innerHTML=people.length?`<table class="roster ${brush?'painting':''}">${head}<tbody>${rows}</tbody><tfoot><tr><th class="rs-name">На смене</th>${counts}<td></td></tr></tfoot></table>`
+    :`<div class="empty-card">${ic('clock',34)}<b>Сотрудников пока нет</b>Подтвердите аккаунты во вкладке «Команда».</div>`;
+  const wrap=$('roster'),th=wrap.querySelector('thead th.today'),nameW=(wrap.querySelector('.rs-name')||{}).offsetWidth||0;
+  if(th&&wrap.scrollWidth>wrap.clientWidth&&!wrap.dataset.scrolled){wrap.scrollLeft=Math.max(0,th.offsetLeft-nameW-8);wrap.dataset.scrolled=iso(weekStart)}
+  if(wrap.dataset.scrolled&&wrap.dataset.scrolled!==iso(weekStart))delete wrap.dataset.scrolled;
+  $('roster-hint').textContent=edit?(brush?'Нажимайте на клетки — изменения копятся в черновике. Сохраните их кнопкой внизу.':'Выберите кисть, чтобы быстро расставить смены, или нажмите на клетку для подробностей.'):'Нажмите на смену, чтобы увидеть подробности.';
+}
+function renderBrushbar(){
+  const el=$('brushbar');if(!el||!canEdit())return;
+  const all=[...BRUSHES,...(customBrush?[{...customBrush,k:'custom'}]:[])];
+  const isOn=b=>brush&&brush!=='erase'&&brush.start===b.start&&brush.end===b.end;
+  el.innerHTML=`<button class="brush ${brush?'':'on'}" onclick="setBrush(null)">${ic('hand',16)}Просмотр</button>
+    ${all.map(b=>`<button class="brush ${isOn(b)?'on':''}" onclick='setBrush(${JSON.stringify({start:b.start,end:b.end,label:b.label})})'><i class="sw ${presetCls(b)}"></i>${esc(b.label)} <small>${shortT(b.start)}–${shortT(b.end)}</small></button>`).join('')}
+    <button class="brush" onclick="openCustomBrush()">${ic('plus',15)}Своё время</button>
+    <button class="brush erase ${brush==='erase'?'on':''}" onclick="setBrush('erase')">${ic('x',15)}Выходной</button>`;
+}
+function setBrush(b){brush=b;if(swapFrom)cancelSwap();renderBrushbar();renderRoster()}
+function openCustomBrush(){
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button><h2>Своё время</h2><p class="sub">Кисть для нестандартной смены.</p>
+    <div class="two" style="margin-top:16px"><div><label class="lb">Начало</label><input class="field" type="time" id="cb-s" value="${customBrush?customBrush.start:'10:00'}"></div><div><label class="lb">Конец</label><input class="field" type="time" id="cb-e" value="${customBrush?customBrush.end:'22:00'}"></div></div>
+    <div class="actions"><button class="btn primary" onclick="saveCustomBrush()">Выбрать кисть</button></div>`;
+  $('ov').classList.add('on');
+}
+function saveCustomBrush(){
+  const s=$('cb-s').value,e=$('cb-e').value;if(!s||!e||s===e)return toast('Укажите начало и конец');
+  customBrush={start:s,end:e,label:'Своё'};localStorage.setItem('tugai_brush_custom',JSON.stringify(customBrush));
+  closeSheet();setBrush({...customBrush});
+}
+function cellTap(uid,date){
+  const list=cellShifts(uid,date);
   if(swapFrom){
-    if(swapFrom===id)return cancelSwap();
+    const target=list.find(s=>s.id&&!isTmp(s.id));
+    if(!target)return toast('Выберите клетку со сменой');
+    if(target.id===swapFrom)return cancelSwap();
     const a=swapFrom;cancelSwap();
-    run(async()=>{await api('/api/schedule/swap',{method:'POST',body:{a,b:id}});toast('Смены обменяны');loadWeek()});return;
+    return run(async()=>{const r=await api('/api/schedule/swap',{method:'POST',body:{a,b:target.id}});toast(r.queued?'Обмен отправится, когда появится сеть':'Смены обменяны');reloadSchedule()});
   }
-  if(canEdit())openShift(id);
+  if(brush&&canEdit()){
+    const key=uid+'|'+date,orig=shifts.filter(s=>s.user_id===uid&&s.date===date);
+    let next;
+    if(brush==='erase')next=orig.length?{op:'clear'}:null;
+    else{
+      const same=list.length===1&&list[0].start===brush.start&&list[0].end===brush.end;
+      next=same?(orig.length?{op:'clear'}:null):{op:'set',start:brush.start,end:brush.end};
+      if(next&&next.op==='set'&&orig.length===1&&orig[0].start===next.start&&orig[0].end===next.end)next=null;
+    }
+    if(next)draft.set(key,next);else draft.delete(key);
+    if(navigator.vibrate)navigator.vibrate(8);
+    saveDraft();renderRoster();return;
+  }
+  if(list.length)return openShiftView(list[0]);
+  if(canEdit())openQuickAdd(uid,date);
 }
-function startSwap(id){closeSheet();swapFrom=id;$('swapbar').classList.remove('hidden');renderWeek()}
-function cancelSwap(){swapFrom=null;$('swapbar').classList.add('hidden');renderWeek()}
-
-async function openShift(id,date){
+function renderDraftBar(){
+  const el=$('draft-bar');if(!el)return;
+  const n=draft.size;el.classList.toggle('hidden',!n||tab!=='schedule');
+  if(n)el.innerHTML=`<span class="db-t"><b>${n} ${plural(n,'изменение','изменения','изменений')}</b><span class="dim"> в черновике</span></span><button class="btn sm" onclick="discardDraft()">Отменить</button><button class="btn sm primary" onclick="saveDraftOps()">Сохранить</button>`;
+}
+async function discardDraft(){if(!await askConfirm('Отменить изменения?','Черновик графика будет очищен.','Отменить',true))return;draft.clear();saveDraft();renderRoster()}
+async function saveDraftOps(){
+  const ops=[...draft].map(([k,v])=>{const [uid,date]=k.split('|');return {op:v.op,user_id:+uid,date,start:v.start||'',end:v.end||'',note:v.note||''}});
+  const btn=document.querySelector('#draft-bar .primary');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>Сохранение'}
+  const ok=await saveOps(ops,'График сохранён');
+  if(ok){draft.clear();saveDraft();renderRoster()}else if(btn){btn.disabled=false;btn.textContent='Сохранить'}
+}
+function renderNowStrip(){
+  const now=new Date(),nowK=iso(now),yK=iso(addDays(now,-1)),mins=now.getHours()*60+now.getMinutes();
+  const t=x=>+x.slice(0,2)*60+ +x.slice(3);
+  const on=Object.values(shiftStore).filter(s=>{
+    const st=t(s.start),en=t(s.end),over=en<=st;
+    if(s.date===nowK)return mins>=st&&(over||mins<en);
+    if(s.date===yK&&over)return mins<en;
+    return false;
+  });
+  $('now-strip').innerHTML=on.length?`<div class="now-strip"><span class="live"></span><b>Сейчас на смене</b>${on.map(s=>`<span class="now-p">${avatar(s.user_name,'xs')}${esc(s.user_name)}<small>до ${esc(s.end)}</small></span>`).join('')}</div>`:'';
+}
+function openShiftView(s){
+  const edit=canEdit()&&!s._draft;
+  const h=hoursOf(s);
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
+    <div class="shv-head">${avatar(s.user_name||staffName(s.user_id),'lg')}<div><h2 style="padding:0">${esc(s.user_name||staffName(s.user_id))}</h2><p class="sub" style="margin:2px 0 0">${esc(ROLES[s.role||staffRole(s.user_id)]||'')}</p></div></div>
+    <div class="shv-time ${presetCls(s)}"><b>${esc(s.start)} – ${esc(s.end)}</b><span>${esc(dayTitle(s.date))} · ${+h.toFixed(1)} ч${s._pending?' · ждёт отправки':''}${s._draft?' · черновик':''}</span></div>
+    ${s.note?`<p style="margin:14px 0 0">${esc(s.note)}</p>`:''}
+    ${edit?`<div class="actions"><button class="btn primary" onclick="openShift(${JSON.stringify(s.id).replace(/"/g,'&quot;')})">${ic('pencil',16)}Изменить</button>
+      ${!isTmp(s.id)?`<button class="btn" onclick="startSwap(${s.id})">⇄ Обменять</button>`:''}</div>
+      <div class="actions" style="margin-top:8px"><button class="btn danger" onclick="delShift(${JSON.stringify(s.id).replace(/"/g,'&quot;')})">${ic('trash',16)}Снять смену</button></div>`:''}`;
+  $('ov').classList.add('on');
+}
+function openQuickAdd(uid,date){
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
+    <h2>${esc(staffName(uid))}</h2><p class="sub">${esc(dayTitle(date))} — выберите смену</p>
+    <div class="qa-grid">${[...BRUSHES,...(customBrush?[{...customBrush,k:'custom'}]:[])].map(b=>`<button class="qa ${presetCls(b)}" onclick="quickAdd(${uid},'${date}','${b.start}','${b.end}')"><b>${esc(b.label)}</b><span>${b.start}–${b.end}</span></button>`).join('')}</div>
+    <div class="actions"><button class="btn" onclick="openShift(null,'${date}',${uid})">${ic('clock',16)}Другое время или заметка</button></div>`;
+  $('ov').classList.add('on');
+}
+async function quickAdd(uid,date,start,end){closeSheet();await saveOps([{op:'set',user_id:uid,date,start,end}],'Смена добавлена')}
+function startSwap(id){closeSheet();setBrush(null);swapFrom=id;$('swapbar').classList.remove('hidden');renderRoster()}
+function cancelSwap(){swapFrom=null;$('swapbar').classList.add('hidden');renderRoster()}
+async function openShift(id,date,uid){
   await ensureStaff();
-  const s=id?shifts.find(x=>x.id===id):null;
-  const d=s?s.date:date;
-  const opts=staffList.map(u=>`<option value="${u.id}" ${(s?s.user_id:'')===u.id?'selected':''}>${esc(u.name)} — ${esc(ROLES[u.role]||'')}</option>`).join('');
-  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button><h2>${s?'Смена':'Новая смена'}</h2>
+  const s=id?Object.values(shiftStore).find(x=>String(x.id)===String(id)):null;
+  const d=s?s.date:date,u=s?s.user_id:(uid||'');
+  const opts=staffList.filter(x=>x.role!=='master'||x.id===u).map(x=>`<option value="${x.id}" ${u===x.id?'selected':''}>${esc(x.name)} — ${esc(ROLES[x.role]||'')}</option>`).join('');
+  const ws=monday(fromIso(d));
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button><h2>${s?'Изменить смену':'Новая смена'}</h2>
     <label class="lb">Сотрудник</label><select class="field" id="sf-user">${opts}</select>
     <label class="lb">Дата</label><input class="field" type="date" id="sf-date" value="${d}">
-    <div class="two"><div><label class="lb">Начало</label><input class="field" type="time" id="sf-start" value="${s?s.start:'10:00'}"></div>
-    <div><label class="lb">Конец</label><input class="field" type="time" id="sf-end" value="${s?s.end:'22:00'}"></div></div>
-    <div class="chips" style="margin-top:10px">${PRESETS.map(p=>`<label><span onclick="$('sf-start').value='${p[1]}';$('sf-end').value='${p[2]}'">${p[0]} ${p[1].slice(0,2)}–${p[2].slice(0,2)}</span></label>`).join('')}</div>
-    ${s?'':`<label class="lb">Повторить в другие дни этой недели</label><div class="chips">${DAYS.map((n,i)=>`<label><input type="checkbox" class="rep" value="${iso(addDays(weekStart,i))}"><span>${n}</span></label>`).join('')}</div>`}
-    <label class="lb">Заметка</label><input class="field" id="sf-note" placeholder="Необязательно" value="${s?esc(s.note):''}">
-    <div class="actions"><button class="btn primary" onclick="saveShift(${id||'null'})">Сохранить</button></div>
-    ${s?`<div class="actions" style="margin-top:8px"><button class="btn" onclick="startSwap(${s.id})">⇄ Обменять</button><button class="btn danger" onclick="delShift(${s.id})">Удалить</button></div>`:''}
-`;
+    <div class="chips" style="margin-top:14px">${[...BRUSHES,...(customBrush?[customBrush]:[])].map(p=>`<label><span onclick="$('sf-start').value='${p.start}';$('sf-end').value='${p.end}'">${p.label} ${shortT(p.start)}–${shortT(p.end)}</span></label>`).join('')}</div>
+    <div class="two"><div><label class="lb">Начало</label><input class="field" type="time" id="sf-start" value="${s?s.start:'08:00'}"></div>
+    <div><label class="lb">Конец</label><input class="field" type="time" id="sf-end" value="${s?s.end:'20:00'}"></div></div>
+    ${s?'':`<label class="lb">Повторить в эти дни недели</label><div class="chips">${DAYS.map((n,i)=>{const k=iso(addDays(ws,i));return `<label><input type="checkbox" class="rep" value="${k}" ${k===d?'checked disabled':''}><span>${n} ${addDays(ws,i).getDate()}</span></label>`}).join('')}</div>`}
+    <label class="lb">Заметка</label><input class="field" id="sf-note" placeholder="Необязательно" value="${s?esc(s.note):''}" maxlength="200">
+    <div class="actions"><button class="btn primary" onclick="saveShift(${s?JSON.stringify(s.id).replace(/"/g,'&quot;'):'null'})">Сохранить</button></div>`;
   $('ov').classList.add('on');
 }
 function closeSheet(){
@@ -1060,28 +1681,36 @@ function closeSheet(){
   closeComposer();commentsPostId=null;$('ov').classList.remove('on');$('sheet').classList.remove('wide');
 }
 async function saveShift(id){
-  const body={user_id:+$('sf-user').value,date:$('sf-date').value,start:$('sf-start').value,end:$('sf-end').value,note:$('sf-note').value};
-  if(!body.user_id||!body.date)return toast('Выберите сотрудника и дату');
-  if(!id){body.dates=[...new Set([body.date,...[...document.querySelectorAll('.rep:checked')].map(x=>x.value)])]}
-  const r=await run(()=>api(id?`/api/schedule/${id}`:'/api/schedule',{method:id?'PUT':'POST',body}));
-  if(r){closeSheet();toast(id?'Смена обновлена':(r.created?`Добавлено смен: ${r.created}`:'Такая смена уже есть'));loadWeek()}
+  const uid=+$('sf-user').value,date=$('sf-date').value,start=$('sf-start').value,end=$('sf-end').value,note=$('sf-note').value.trim();
+  if(!uid||!date)return toast('Выберите сотрудника и дату');
+  if(!start||!end||start===end)return toast('Проверьте время начала и конца');
+  let ops;
+  if(id){
+    const s=shiftStore[id];
+    ops=isTmp(id)?[{op:'clear',user_id:s.user_id,date:s.date},{op:'set',user_id:uid,date,start,end,note}]
+      :[{op:'delete',id},{op:'add',user_id:uid,date,start,end,note}];
+  }else{
+    const dates=[...new Set([date,...[...document.querySelectorAll('.rep:checked')].map(x=>x.value)])];
+    ops=dates.map(d=>({op:'add',user_id:uid,date:d,start,end,note}));
+  }
+  closeSheet();await saveOps(ops,id?'Смена изменена':'Смена добавлена');
 }
 async function delShift(id){
-  if(!await askConfirm('Удалить смену?','Изменение попадёт в историю — его можно будет отменить.','Удалить',true))return;
-  const r=await run(()=>api(`/api/schedule/${id}`,{method:'DELETE'}));
-  if(r){closeSheet();toast('Смена удалена');loadWeek()}
+  if(!await askConfirm('Снять смену?','Изменение попадёт в историю — его можно будет отменить.','Снять',true))return;
+  const s=shiftStore[id];closeSheet();
+  await saveOps(isTmp(id)?[{op:'clear',user_id:s.user_id,date:s.date}]:[{op:'delete',id}],'Смена снята');
 }
 async function copyPrevWeek(){
   if(!await askConfirm('Скопировать прошлую неделю?','Смены прошлой недели добавятся в эту. Существующие смены сохранятся.','Скопировать'))return;
   const r=await run(()=>api('/api/schedule/copy_week',{method:'POST',body:{from_start:iso(addDays(weekStart,-7)),to_start:iso(weekStart)}}));
-  if(r){toast(r.created?`Скопировано смен: ${r.created}`:'Копировать нечего');loadWeek()}
+  if(r){toast(r.queued?'Скопируем, когда появится сеть':(r.created?`Скопировано смен: ${r.created}`:'Копировать нечего'));loadWeek()}
 }
 async function clearWeek(){
   if(!await askConfirm('Очистить неделю?','Все смены этой недели будут удалены. Действие попадёт в историю.','Очистить',true))return;
   const r=await run(()=>api('/api/schedule/clear_week',{method:'POST',body:{start:iso(weekStart)}}));
-  if(r){toast(`Удалено смен: ${r.deleted}`);loadWeek()}
+  if(r){toast(r.queued?'Очистим, когда появится сеть':`Удалено смен: ${r.deleted}`);loadWeek()}
 }
-const ICONS={add:'+',edit:'✎',delete:'✕',clear:'✕',swap:'⇄',copy:'⧉',undo:'↩'};
+const ICONS={add:'+',edit:'✎',delete:'✕',clear:'✕',swap:'⇄',copy:'⧉',undo:'↩',bulk:'▦'};
 async function loadHistory(){
   const r=await run(()=>api('/api/schedule/history'));if(!r)return;
   $('history').innerHTML=r.length?r.map(h=>`
@@ -1095,54 +1724,68 @@ async function loadHistory(){
 }
 async function undoEntry(hid){
   const r=await run(()=>api(`/api/schedule/history/${hid}/undo`,{method:'POST'}));
-  if(r){toast('Изменение отменено');loadHistory();if(schView==='week')loadWeek();if(schView==='month')loadMonth()}
+  if(r){toast(r.queued?'Отменим, когда появится сеть':'Изменение отменено');loadHistory()}
 }
 async function undoLast(){
   const r=await run(()=>api('/api/schedule/undo_last',{method:'POST'}));
-  if(r){toast(`Отменено: ${r.description}`);loadHistory();if(schView==='week')loadWeek();if(schView==='month')loadMonth()}
+  if(r){toast(r.queued?'Отменим, когда появится сеть':`Отменено: ${r.description}`);loadHistory()}
 }
-
-/* ---------- ГРАФИК: МЕСЯЦ ---------- */
+/* месяц */
 function monthGrid(d){const start=monday(new Date(d.getFullYear(),d.getMonth(),1));return Array.from({length:42},(_,i)=>addDays(start,i))}
 async function loadMonth(){
   const days=monthGrid(schMonth);
   $('mo-label').textContent=`${MONTHS_NOM[schMonth.getMonth()]} ${schMonth.getFullYear()}`;
   $('month-head').innerHTML=DAYS.map(d=>`<div>${d}</div>`).join('');
-  const r=await run(()=>api(`/api/schedule?start=${iso(days[0])}&end=${iso(days[41])}`));
-  if(r){shifts=r;renderMonth(days)}
+  shifts=await fetchShifts(iso(days[0]),iso(days[41]));renderMonth(days);
 }
 function shiftMonth(n){schMonth=new Date(schMonth.getFullYear(),schMonth.getMonth()+n,1);loadMonth()}
 function renderMonth(days){
   const cur=schMonth.getMonth(),todayK=iso(new Date());
   $('month').innerHTML=days.map(d=>{
-    const k=iso(d),list=shifts.filter(s=>s.date===k);
-    const chips=list.slice(0,3).map(s=>`<div class="mchip r-${s.role||'bartender'}">${esc((s.user_name||'').split(' ')[0])}</div>`).join('');
+    const k=iso(d),list=shifts.filter(s=>s.date===k),mine=list.some(s=>s.user_id===me.id);
+    const chips=list.slice(0,3).map(s=>`<div class="mchip r-${s.role||'bartender'} ${s.user_id===me.id?'mine':''}">${esc((s.user_name||'').split(' ')[0])}</div>`).join('');
     const more=list.length>3?`<div class="mchip muted">+${list.length-3}</div>`:'';
-    return `<div class="mday ${d.getMonth()!==cur?'other':''} ${k===todayK?'today':''}" onclick="gotoWeekFrom('${k}')">
+    return `<div class="mday ${d.getMonth()!==cur?'other':''} ${k===todayK?'today':''} ${mine?'has-me':''}" onclick="openDay('${k}')">
       <div class="n">${d.getDate()}</div>${chips}${more}</div>`;
   }).join('');
 }
-function gotoWeekFrom(k){
-  weekStart=monday(fromIso(k));schView='week';
-  document.querySelectorAll('#sch-seg button').forEach(x=>x.classList.toggle('on',x.dataset.s==='week'));
-  $('sch-month').classList.add('hidden');$('sch-week').classList.remove('hidden');$('sch-history').classList.add('hidden');
-  loadWeek();
+function openDay(k){
+  const list=shifts.filter(s=>s.date===k).sort((a,b)=>a.start.localeCompare(b.start));
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
+    <h2>${esc(dayTitle(k).replace(/^./,c=>c.toUpperCase()))}</h2><p class="sub">${list.length?`${list.length} ${plural(list.length,'смена','смены','смен')}`:'Смен нет'}</p>
+    ${list.length?`<div class="acc-group">${list.map(s=>`<button class="acc-row acc-btn" onclick="closeSheet();openShiftView(shiftStore['${s.id}'])"><span class="lbl">${avatar(s.user_name,'sm')}<span><b style="font-weight:600">${esc(s.user_name)}</b><br><small class="muted">${esc(ROLES[s.role]||'')}</small></span></span><span class="sh ${presetCls(s)}">${shortT(s.start)}–${shortT(s.end)}</span></button>`).join('')}</div>`:''}
+    <div class="actions"><button class="btn" onclick="closeSheet();weekStart=monday(fromIso('${k}'));setSchView('week')">Открыть неделю</button>${canEdit()?`<button class="btn primary" onclick="openShift(null,'${k}')">${ic('plus',16)}Смена</button>`:''}</div>`;
+  $('ov').classList.add('on');
+}
+/* мои смены */
+async function loadMine(){
+  const today=new Date(),a=iso(addDays(today,-1)),b=iso(addDays(today,42));
+  const endOf=s=>{const d=fromIso(s.date);d.setHours(+s.end.slice(0,2),+s.end.slice(3),0,0);if(s.end<=s.start)d.setDate(d.getDate()+1);return d};
+  const list=(await fetchShifts(a,b)).filter(s=>s.user_id===me.id&&endOf(s)>today);
+  const wk=list.filter(s=>s.date>=iso(monday(today))&&s.date<=iso(addDays(monday(today),6))).reduce((n,s)=>n+hoursOf(s),0);
+  const next=list[0];
+  const startOf=s=>{const d=fromIso(s.date);d.setHours(+s.start.slice(0,2),+s.start.slice(3),0,0);return d};
+  const nextTxt=next?(startOf(next)<=today?'идёт сейчас':fmtIn(startOf(next).getTime()/1000)):'';
+  const byWeek={};list.forEach(s=>{const w=iso(monday(fromIso(s.date)));(byWeek[w]=byWeek[w]||[]).push(s)});
+  $('mine-list').innerHTML=list.length?`<div class="mine-hero">${next?`<div><span class="muted">Следующая смена · ${esc(nextTxt)}</span><b>${esc(dayTitle(next.date).replace(/^./,c=>c.toUpperCase()))}, ${esc(next.start)}–${esc(next.end)}</b></div>`:''}<div class="mine-stat"><b>${+wk.toFixed(1)} ч</b><span>на этой неделе</span></div></div>
+    ${Object.keys(byWeek).sort().map(w=>{const e=addDays(fromIso(w),6);return `<div class="day-head">${fromIso(w).getDate()} ${MONTHS[fromIso(w).getMonth()].slice(0,3)} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0,3)} · ${+byWeek[w].reduce((n,s)=>n+hoursOf(s),0).toFixed(1)} ч</div>
+      <div class="group">${byWeek[w].map(s=>`<div class="row" onclick="openShiftView(shiftStore['${s.id}'])" style="cursor:pointer"><div><div class="t">${esc(dayTitle(s.date).replace(/^./,c=>c.toUpperCase()))}</div>${s.note?`<div class="s">${esc(s.note)}</div>`:''}</div><span class="sh ${presetCls(s)}">${esc(s.start)}–${esc(s.end)}</span></div>`).join('')}</div>`}).join('')}`
+    :`<div class="empty-card">${ic('clock',34)}<b>Смен пока нет</b>Когда руководитель поставит вас в график, смены появятся здесь.</div>`;
 }
 
 /* ---------- ЗАЯВКИ ---------- */
 async function fetchOrders(){
   const r=await run(()=>api('/api/get_orders'));if(!r)return;
-  const merged=[...pendingOrders.map((o,i)=>({...o,id:'pending-'+i})),...r];
-  $('orders').innerHTML=merged.length?merged.map(o=>`<div class="row"><div style="min-width:0"><div class="t">${esc(o.item_name)} <span style="color:var(--green);font-weight:600">— ${esc(o.quantity)}</span></div><div class="s">${o.comment?esc(o.comment)+' · ':''}${esc(o.author_name)}${o._pending?' · ждёт отправки':''}</div></div>${o._pending?'<span class="muted" style="font-size:13px">⏳</span>':`<button class="btn icon sm danger" onclick="removeOrder(${o.id})" aria-label="Удалить позицию">${ic('trash',17)}</button>`}</div>`).join(''):'<div class="row muted" style="justify-content:center;padding:28px">Список пуст</div>';
+  $('orders').innerHTML=r.length?r.map(o=>`<div class="row"><div style="min-width:0"><div class="t">${esc(o.item_name)} <span style="color:var(--green);font-weight:600">— ${esc(o.quantity)}</span></div><div class="s">${o.comment?esc(o.comment)+' · ':''}${esc(o.author_name)}${o._pending?' · <span class="pend">ждёт отправки</span>':''}</div></div>${o._pending?`<button class="btn icon sm" onclick="dropQueued(x=>'q:'+x.id==='${o.id}');fetchOrders()" aria-label="Отменить">${ic('x',16)}</button>`:`<button class="btn icon sm danger" onclick="removeOrder(${o.id})" aria-label="Удалить позицию">${ic('trash',17)}</button>`}</div>`).join(''):'<div class="row muted" style="justify-content:center;padding:28px">Список пуст</div>';
 }
 async function submitOrder(){
   const name=$('o-name').value.trim(),qty=$('o-qty').value.trim();
   if(!name||!qty)return toast('Укажите позицию и количество');
   const body={item_name:name,quantity:qty,comment:$('o-comment').value.trim()};
-  const r=await run(()=>api('/api/add_order',{method:'POST',body}));
+  const r=await run(()=>api('/api/add_order',{method:'POST',body,meta:{author:me.name}}));
   if(r){
-    $('o-name').value='';$('o-qty').value='';$('o-comment').value='';
-    if(r.queued){pendingOrders.push({...body,author_name:me.name,_pending:true});toast('Офлайн: сохранено, отправим при подключении')}
+    $('o-name').value='';$('o-qty').value='';$('o-comment').value='';$('o-name').focus();
+    if(r.queued)toast('Нет сети — позиция сохранена и отправится сама');
     fetchOrders();
   }
 }
@@ -1152,6 +1795,80 @@ async function sendOrderNow(){
   if(!await askConfirm('Отправить заявку сейчас?','Текущий список уйдёт в Telegram-группу, не дожидаясь 07:00.','Отправить'))return;
   const r=await run(()=>api('/api/orders/send_now',{method:'POST'}));
   if(r&&!r.queued){toast('Заявка отправлена в группу');fetchOrders()}
+}
+
+/* ---------- ОБЪЯВЛЕНИЯ ---------- */
+let annList=[];
+async function loadNews(){
+  const r=await run(()=>api('/api/announcements'));if(!r)return;
+  annList=r;renderNews();updateNewsBadge(r.filter(a=>!a.read).length);
+}
+async function refreshUnread(){
+  if(!me)return;
+  try{const r=await api('/api/announcements/unread');const pend=getOutbox().filter(x=>/^\/api\/announcements\/\d+\/read$/.test(x.path)).length;updateNewsBadge(Math.max(0,r.count-pend))}catch(e){}
+}
+function updateNewsBadge(n){
+  const b=$('news-badge');if(b){b.textContent=n;b.classList.toggle('hidden',!n)}
+  try{if(n&&navigator.setAppBadge)navigator.setAppBadge(n);else if(navigator.clearAppBadge)navigator.clearAppBadge()}catch(e){}
+}
+function linkify(t){return esc(t).replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>')}
+function renderNews(){
+  const el=$('news-list');
+  el.innerHTML=annList.length?annList.map(a=>`
+    <article class="ann ${a.read?'':'unread'} ${a.pinned?'pinned':''}">
+      <div class="post-head">${avatar(a.user_name)}
+        <div><div class="post-who">${esc(a.user_name)}</div><div class="post-meta">${esc(fmtShameDate(a.created_at))}${a.edited_at?' · изменено':''}</div></div>
+        <div class="post-actions">${a.pinned?`<span class="ann-pin" title="Закреплено">${ic('pin',16)}</span>`:''}
+          ${a.can_edit?`<button class="btn icon sm" onclick="openAnnEditor(${a.id})" aria-label="Изменить">${ic('pencil',17)}</button><button class="btn icon sm danger" onclick="deleteAnn(${a.id})" aria-label="Удалить">${ic('trash',17)}</button>`:''}</div>
+      </div>
+      ${a.title?`<h3 class="ann-title">${esc(a.title)}</h3>`:''}
+      ${a.body?`<div class="ann-body">${linkify(a.body)}</div>`:''}
+      <div class="ann-foot">
+        ${a.user_id===me.id?'<span class="muted" style="font-size:14px">Ваше объявление</span>':a.read?`<span class="ann-ok">${ic('check',16)}Вы ознакомились${a.read_at?' · '+esc(fmtShameDate(a.read_at)):''}</span>`:`<button class="btn primary sm" onclick="readAnn(${a.id})">${ic('check',16)}Ознакомлен</button>`}
+        ${a.readers?`<button class="btn ghost sm" style="margin-left:auto" onclick="openReaders(${a.id})">Прочитали ${a.readers.length} из ${a.readers.length+a.not_read.length}</button>`:''}
+      </div>
+    </article>`).join('')
+    :`<div class="empty-card">${ic('megaphone',34)}<b>Объявлений пока нет</b>${canEdit()?'Нажмите «Новое объявление», чтобы написать команде.':'Здесь появятся новости от руководства.'}</div>`;
+}
+async function readAnn(id){
+  const a=annList.find(x=>x.id===id);if(!a)return;
+  a.read=true;a.read_at=Math.floor(Date.now()/1000);renderNews();
+  updateNewsBadge(annList.filter(x=>!x.read).length);
+  const r=await run(()=>api(`/api/announcements/${id}/read`,{method:'POST'}));
+  if(r&&!r.queued&&canEdit())loadNews();
+}
+function openReaders(id){
+  const a=annList.find(x=>x.id===id);if(!a)return;
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
+    <h2>Кто ознакомился</h2><p class="sub">${esc(a.title||'Объявление')} · ${a.readers.length} из ${a.readers.length+a.not_read.length}</p>
+    ${a.not_read.length?`<label class="lb">Ещё не прочитали · ${a.not_read.length}</label><div class="acc-group" style="margin-top:0">${a.not_read.map(n=>`<div class="acc-row"><span class="lbl">${avatar(n,'sm')}${esc(n)}</span></div>`).join('')}</div>`:''}
+    ${a.readers.length?`<label class="lb">Ознакомились · ${a.readers.length}</label><div class="acc-group" style="margin-top:0">${a.readers.map(r=>`<div class="acc-row"><span class="lbl">${avatar(r.name,'sm')}${esc(r.name)}</span><span class="muted" style="font-size:14px">${esc(fmtShameDate(r.read_at))}</span></div>`).join('')}</div>`:''}`;
+  $('ov').classList.add('on');
+}
+function openAnnEditor(id){
+  const a=id?annList.find(x=>x.id===id):null;
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
+    <h2>${a?'Изменить объявление':'Новое объявление'}</h2>${a?'':'<p class="sub">Все сотрудники получат уведомление.</p>'}
+    <label class="lb" for="an-t">Заголовок</label><input class="field" id="an-t" maxlength="120" placeholder="Например, Инвентаризация в понедельник" value="${a?esc(a.title):''}">
+    <label class="lb" for="an-b">Текст</label><textarea class="field" id="an-b" rows="6" maxlength="4000" placeholder="Подробности">${a?esc(a.body):''}</textarea>
+    <div class="acc-group"><div class="acc-row"><span class="lbl"><span class="ib" style="background:#ff9f0a">${ic('pin',17)}</span>Закрепить сверху</span>
+      <button class="switch ${a&&a.pinned?'on':''}" id="an-p" role="switch" onclick="this.classList.toggle('on')" aria-label="Закрепить"></button></div></div>
+    <div class="actions"><button class="btn primary" onclick="saveAnn(${a?a.id:'null'})">${a?'Сохранить':'Опубликовать'}</button></div>`;
+  $('ov').classList.add('on');
+  if(matchMedia('(hover:hover)').matches)setTimeout(()=>{if(!document.activeElement||document.activeElement===document.body)$('an-t').focus()},60);
+}
+async function saveAnn(id){
+  const body={title:$('an-t').value.trim(),body:$('an-b').value.trim(),pinned:$('an-p').classList.contains('on')};
+  if(!body.title&&!body.body)return toast('Напишите заголовок или текст');
+  const r=await run(()=>api(id?`/api/announcements/${id}`:'/api/announcements',{method:id?'PUT':'POST',body}));
+  if(!r)return;closeSheet();
+  toast(r.queued?'Нет сети — опубликуем, когда появится связь':(id?'Сохранено':'Опубликовано — команда получит уведомление'));
+  if(!r.queued)loadNews();
+}
+async function deleteAnn(id){
+  if(!await askConfirm('Удалить объявление?','Оно исчезнет у всех сотрудников.','Удалить',true))return;
+  const r=await run(()=>api(`/api/announcements/${id}`,{method:'DELETE'}));
+  if(r){annList=annList.filter(x=>x.id!==id);renderNews();toast('Объявление удалено')}
 }
 
 /* ---------- ЧЕК-ЛИСТ ---------- */
@@ -1251,6 +1968,9 @@ const ICON_PATHS={
   image:'<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
   flag:'<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
   pin:'<path d="M9 4h6l-1 6 3 3H7l3-3-1-6zM12 13v7"/>',
+  stop:'<path d="M8.5 3h7L21 8.5v7L15.5 21h-7L3 15.5v-7z"/><path d="M8 12h8"/>',
+  hand:'<path d="M8 13V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v8a7 7 0 01-7 7h-.5a6 6 0 01-5-2.7L3 15.5a1.6 1.6 0 012.6-1.8L8 16"/>',
+  megaphone:'<path d="M3 10v4a1 1 0 001 1h3l6 4V5L7 9H4a1 1 0 00-1 1z"/><path d="M17 8.5a5 5 0 010 7M19.5 6a8.5 8.5 0 010 12"/>',
 };
 function ic(n,size=20){return `<svg class="i" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[n]||''}</svg>`}
 function hydrateIcons(root=document){root.querySelectorAll('[data-ic]').forEach(el=>{if(el.dataset.icDone)return;el.dataset.icDone=1;el.insertAdjacentHTML('afterbegin',ic(el.dataset.ic,el.classList.contains('cta-ic')?24:18))})}
@@ -1359,7 +2079,7 @@ async function prepareImage(file){
 }
 function apiForm(path,method,fd,onProgress){
   return new Promise((resolve,reject)=>{
-    if(!navigator.onLine)return reject(new Error('Нет соединения. Фото не потеряются — отправьте, когда появится сеть.'));
+    if(!navigator.onLine)return reject(Object.assign(new Error('Нет соединения'),{offline:true}));
     const x=new XMLHttpRequest();x.open(method,path);
     if(token)x.setRequestHeader('Authorization','Bearer '+token);
     if(onProgress&&x.upload)x.upload.onprogress=e=>{if(e.lengthComputable)onProgress(e.loaded/e.total)};
@@ -1369,7 +2089,7 @@ function apiForm(path,method,fd,onProgress){
       if(x.status<200||x.status>=300)return reject(new Error(typeof data?.detail==='string'?data.detail:(x.status===413?'Файлы слишком большие':'Ошибка загрузки')));
       resolve(data||{});
     };
-    x.onerror=()=>reject(new Error('Нет соединения с сервером'));
+    x.onerror=()=>reject(Object.assign(new Error('Нет соединения с сервером'),{offline:true}));
     x.send(fd);
   });
 }
@@ -1442,10 +2162,21 @@ async function composerSubmit(){
     fd.append('keep_photo_ids',c.items.filter(it=>it.kind==='old').map(it=>it.id).join(','));
     for(const it of c.items.filter(it=>it.kind==='new'))fd.append('files',await prepareImage(it.file));
     if(cmp!==c)return;
-    bar.classList.remove('hidden');
-    await apiForm(c.path,c.method,fd,p=>{bar.firstElementChild.style.width=Math.round(p*100)+'%';btn.innerHTML=`<span class="spin"></span>Отправка ${Math.round(p*100)}%`});
-    if(cmp===c)closeSheet();
-    toast(c.doneMsg||'Готово');c.onDone&&c.onDone();
+    try{
+      if(!navigator.onLine)throw Object.assign(new Error('offline'),{offline:true});
+      bar.classList.remove('hidden');
+      await apiForm(c.path,c.method,fd,p=>{bar.firstElementChild.style.width=Math.round(p*100)+'%';btn.innerHTML=`<span class="spin"></span>Отправка ${Math.round(p*100)}%`});
+      if(cmp===c)closeSheet();
+      toast(c.doneMsg||'Готово');c.onDone&&c.onDone();
+    }catch(e){
+      if(!e.offline)throw e;
+      // Нет сети — сохраняем на телефоне, отправится само, как только появится связь.
+      const fields={},files=[];
+      for(const [k,v] of fd.entries()){if(k==='files')files.push({name:v.name||'photo.jpg',blob:v});else fields[k]=v}
+      await queueUpload({path:c.path,method:c.method,fields,files,meta:{kind:c.kind||'',label:c.title,caption:fields.caption||'',...(c.extra||{}),target:c.target||null}});
+      if(cmp===c)closeSheet();
+      toast('Нет сети — сохранено на телефоне и отправится само');c.onDone&&c.onDone();
+    }
   }catch(e){
     toast(e.message||'Ошибка загрузки');
     if(cmp===c){c.busy=false;bar.classList.add('hidden');composerRender()}
@@ -1455,7 +2186,7 @@ async function composerSubmit(){
 /* ---------- ФОТО СМЕНЫ (ОТЧЁТЫ) ---------- */
 let photoShifts=[],myReports=[],teamReports=[];
 async function loadPhotos(){
-  loadArchiveInfo();
+  loadArchiveInfo();await loadPendingUploads();
   const [st,mine]=await Promise.all([run(()=>api('/api/shifts/photos/status')),run(()=>api('/api/shifts/reports/mine'))]);
   if(st)photoShifts=st;if(mine)myReports=mine;
   renderPhotos();
@@ -1477,6 +2208,8 @@ function reportBody(rep){
 function renderReportCard(rep){return `<article class="report-card">${reportBody(rep)}</article>`}
 function cpTile(s,cp,mine){
   const r=cp.report;
+  if(!cp.uploaded&&pendingUploads.some(u=>u.meta&&u.meta.kind==='report'&&+u.meta.shift_id===s.shift_id&&u.meta.slot===cp.slot))
+    return `<div class="cp waiting"><div class="cp-top"><span class="cp-label">Отчёт к</span></div><div class="cp-time">${esc(cp.due_at)}</div><div class="cp-status"><span class="dot"></span>Ждёт отправки</div></div>`;
   const status=cp.uploaded?`Загружен${r&&r.uploaded_at?' · '+new Date(r.uploaded_at*1000).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):''}`:(cp.overdue?'Просрочен':'Ожидается');
   const acts=[];
   if(!cp.uploaded&&mine)acts.push(`<button class="btn sm primary" onclick="newReport(${s.shift_id},'${cp.slot}')">${ic('camera',16)}Загрузить</button>`);
@@ -1488,7 +2221,14 @@ function cpTile(s,cp,mine){
     ${acts.length?`<div class="cp-actions">${acts.join('')}</div>`:''}
   </div>`;
 }
+function pendingReportHtml(u){
+  return `<div class="report"><div class="report-head"><div><div class="report-title">${esc(u.meta.slot==='extra'?'Дополнительный отчёт':'Отчёт к '+u.meta.slot)}</div>
+    <div class="report-meta"><span class="pend-badge">${ic('clock',14)}Ждёт отправки</span></div></div>
+    <div class="post-actions"><button class="btn icon sm" onclick="cancelUpload('${u.id}')" aria-label="Отменить отправку">${ic('x',16)}</button></div></div>
+    ${pendingThumbs(u)}${u.meta.caption?`<p class="post-caption">${esc(u.meta.caption)}</p>`:''}</div>`;
+}
 function renderPhotos(){
+  releasePendingUrls();
   const shown=new Set();
   $('photo-list').innerHTML=photoShifts.length?photoShifts.map(s=>{
     const mine=me&&me.id===s.user_id;
@@ -1498,6 +2238,7 @@ function renderPhotos(){
       <div class="shift-head">${avatar(s.user_name)}<div><div class="who">${esc(s.user_name)}${mine?' <span class="muted" style="font-weight:400">· вы</span>':''}</div><div class="when">Смена ${esc(s.start)}–${esc(s.end)}</div></div></div>
       <div class="cp-grid">${s.checkpoints.map(cp=>cpTile(s,cp,mine)).join('')}</div>
       ${reports.map(r=>`<div class="report">${reportBody(r)}</div>`).join('')}
+      ${pendingUploads.filter(u=>u.meta&&u.meta.kind==='report'&&+u.meta.shift_id===s.shift_id).map(pendingReportHtml).join('')}
       ${mine?`<button class="add-report" onclick="newReport(${s.shift_id},'extra')">${ic('plus',18)}Дополнительный отчёт</button>`:''}
     </section>`;
   }).join(''):`<div class="empty-card">${ic('camera',34)}<b>На сегодня отчёты не нужны</b>Когда у вас будет смена, здесь появятся чек-поинты для фото.</div>`;
@@ -1531,7 +2272,7 @@ function newReport(shiftId,slot,sub){
   openComposer({
     title:slot==='extra'?'Дополнительный отчёт':`Отчёт к ${slot}`,sub:sub||'Сфотографируйте бар — можно несколько фото.',
     submitLabel:'Отправить отчёт',placeholder:'Что сделано за смену (необязательно)',
-    path:'/api/shifts/reports',method:'POST',doneMsg:'Отчёт отправлен',onDone:reloadReports,
+    path:'/api/shifts/reports',method:'POST',doneMsg:'Отчёт отправлен',onDone:reloadReports,kind:'report',
     extra:{shift_id:shiftId,slot}
   });
 }
@@ -1540,7 +2281,7 @@ function editReport(id){
   openComposer({
     title:'Изменить отчёт',sub:reportSlotLabel(rep.slot),submitLabel:'Сохранить',placeholder:'Что сделано за смену (необязательно)',
     caption:rep.caption,existing:(rep.photos||[]).map(p=>({id:p.id,url:reportPhotoUrl(id,p.id)})),
-    path:`/api/shifts/reports/${id}`,method:'PUT',doneMsg:'Изменения сохранены',onDone:reloadReports
+    path:`/api/shifts/reports/${id}`,method:'PUT',doneMsg:'Изменения сохранены',onDone:reloadReports,kind:'report-edit',target:id
   });
 }
 async function deleteReport(id){
@@ -1573,7 +2314,7 @@ async function openMyShifts(){
 let shameList=[];
 async function ensureStaff(){if(!staffList.length){try{staffList=await api('/api/staff')}catch(e){}}}
 async function loadShame(){
-  loadArchiveInfo();ensureStaff();
+  loadArchiveInfo();ensureStaff();await loadPendingUploads();
   const r=await run(()=>api('/api/shame'));if(!r)return;
   shameList=r;renderShame();
 }
@@ -1582,7 +2323,12 @@ function shameTagOptions(selected){
   return '<option value="">Никого не отмечать</option>'+staffList.filter(u=>u.id!==me.id).map(u=>`<option value="${u.id}" ${selected===u.id?'selected':''}>${esc(u.name)} — ${esc(ROLES[u.role]||'')}</option>`).join('');
 }
 function renderShame(){
-  $('shame-list').innerHTML=shameList.length?shameList.map(p=>`
+  releasePendingUrls();
+  const pend=pendingUploads.filter(u=>u.meta&&u.meta.kind==='shame').map(u=>`<article class="post">
+      <div class="post-head">${avatar(me.name)}<div><div class="post-who">${esc(me.name)}</div><div class="post-meta"><span class="pend-badge">${ic('clock',14)}Ждёт отправки</span></div></div>
+      <div class="post-actions"><button class="btn icon sm" onclick="cancelUpload('${u.id}')" aria-label="Отменить отправку">${ic('x',16)}</button></div></div>
+      ${pendingThumbs(u)}${u.meta.caption?`<p class="post-caption">${esc(u.meta.caption)}</p>`:''}</article>`).join('');
+  $('shame-list').innerHTML=pend+(shameList.length?shameList.map(p=>`
     <article class="post">
       <div class="post-head">${avatar(p.user_name)}
         <div><div class="post-who">${esc(p.user_name)}</div><div class="post-meta">${esc(fmtShameDate(p.created_at))}${p.edited_at?' · изменено':''}</div></div>
@@ -1592,13 +2338,13 @@ function renderShame(){
       ${p.caption?`<p class="post-caption">${esc(p.caption)}</p>`:''}
       ${p.tagged_user_name?`<div class="tagged">${avatar(p.tagged_user_name,'xs')}${esc(p.tagged_user_name)}</div>`:''}
       <div class="post-foot"><button class="btn ghost sm" onclick="openShameComments(${p.id})">${ic('chat',18)}${p.comment_count?`${p.comment_count} ${plural(p.comment_count,'комментарий','комментария','комментариев')}`:'Комментировать'}</button></div>
-    </article>`).join(''):`<div class="empty-card">${ic('flag',34)}<b>Здесь пока пусто</b>И это прекрасно.</div>`;
+    </article>`).join(''):(pend?'':`<div class="empty-card">${ic('flag',34)}<b>Здесь пока пусто</b>И это прекрасно.</div>`));
 }
 async function newShame(){
   await ensureStaff();
   openComposer({
     title:'Новая запись',sub:'Покажите, что сделано не так.',submitLabel:'Опубликовать',placeholder:'Что сделано не так?',captionLabel:'Что не так',
-    tagOptions:shameTagOptions(null),path:'/api/shame',method:'POST',doneMsg:'Опубликовано',onDone:loadShame
+    tagOptions:shameTagOptions(null),path:'/api/shame',method:'POST',doneMsg:'Опубликовано',onDone:loadShame,kind:'shame'
   });
 }
 async function editShame(id){
@@ -1608,7 +2354,7 @@ async function editShame(id){
     title:'Изменить запись',submitLabel:'Сохранить',placeholder:'Что сделано не так?',captionLabel:'Что не так',
     caption:p.caption,tagOptions:shameTagOptions(p.tagged_user_id),
     existing:(p.photos||[]).map(ph=>({id:ph.id,url:shamePhotoUrl(id,ph.id)})),
-    path:`/api/shame/${id}`,method:'PUT',doneMsg:'Изменения сохранены',onDone:loadShame
+    path:`/api/shame/${id}`,method:'PUT',doneMsg:'Изменения сохранены',onDone:loadShame,kind:'shame-edit',target:id
   });
 }
 async function deleteShame(id){
@@ -1632,7 +2378,7 @@ async function openShameComments(id){
 async function refreshShameComments(){
   const id=commentsPostId,list=await run(()=>api(`/api/shame/${id}/comments`));
   const el=$('shc-list');if(!list||!el||commentsPostId!==id)return;
-  el.innerHTML=list.length?list.map(c=>`<div class="cm ${c.user_id===me.id?'me':''}">${avatar(c.user_name,'sm')}<div class="cm-bubble"><div class="n">${esc(c.user_id===me.id?'Вы':c.user_name)}<span>${esc(fmtShameDate(c.created_at))}</span></div><div class="x">${esc(c.text)}</div></div></div>`).join('')
+  el.innerHTML=list.length?list.map(c=>`<div class="cm ${c.user_id===me.id?'me':''}">${avatar(c.user_name,'sm')}<div class="cm-bubble"><div class="n">${esc(c.user_id===me.id?'Вы':c.user_name)}<span>${c._pending?'ждёт отправки':esc(fmtShameDate(c.created_at))}</span></div><div class="x">${esc(c.text)}</div></div></div>`).join('')
     :`<div class="empty" style="padding:28px 0">${ic('chat',30)}<div style="margin-top:6px">Комментариев пока нет — будьте первым.</div></div>`;
   el.scrollTop=el.scrollHeight;
   const p=shameList.find(x=>x.id===id);if(p&&p.comment_count!==list.length){p.comment_count=list.length;renderShame()}
@@ -1642,25 +2388,23 @@ async function sendShameComment(){
   btn.dataset.busy=1;btn.disabled=true;
   const r=await run(()=>api(`/api/shame/${commentsPostId}/comments`,{method:'POST',body:{text}}));
   delete btn.dataset.busy;
-  if(r){inp.value='';if(r.queued)toast('Нет сети — комментарий отправится позже');else refreshShameComments()}
+  if(r){inp.value='';if(r.queued)toast('Нет сети — комментарий отправится позже');refreshShameComments()}
   else btn.disabled=false;
 }
 
 /* ---------- АККАУНТ: тема, уведомления, выход ---------- */
-let pushState={supported:false,on:false};
 function openAccount(){
   const theme=localStorage.getItem('tugai_theme')||'auto';
   $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
     <div class="acc-head">${avatar(me.name,'lg')}<div class="nm">${esc(me.name)}</div><div class="rl">${esc(ROLES[me.role]||'')} · @${esc(me.username||'')}</div></div>
     <label class="lb">Оформление</label>
     <div class="seg full" id="acc-theme">${[['auto','Авто'],['light','Светлое'],['dark','Тёмное']].map(([v,l])=>`<button data-v="${v}" class="${theme===v?'on':''}" onclick="setTheme('${v}')">${l}</button>`).join('')}</div>
-    ${pushState.supported?`<div class="acc-group"><div class="acc-row"><span class="lbl"><span class="ib" style="background:#ff3b30">${ic('bell',17)}</span>Уведомления</span>
-      <button class="switch ${pushState.on?'on':''}" id="acc-push" role="switch" aria-checked="${pushState.on}" onclick="togglePush()" aria-label="Уведомления"></button></div></div>`:''}
+    <div id="acc-push-box">${pushRowHtml()}</div>
     <div class="actions"><button class="btn danger" onclick="logout()">${ic('logout',18)}Выйти из аккаунта</button></div>`;
   $('ov').classList.add('on');
 }
 function setTheme(t){
-  localStorage.setItem('tugai_theme',t);applyTheme(t);
+  localStorage.setItem('tugai_theme',t);applyTheme(t);applyGlow();
   document.querySelectorAll('#acc-theme button').forEach(b=>b.classList.toggle('on',b.dataset.v===t));
 }
 
@@ -1692,20 +2436,20 @@ function renderNotes(){
       (rest.length?`<div class="group">${rest.map(noteRowHtmlList).join('')}</div>`:(pinned.length?'':`<div class="empty-card">${ic('pencil',34)}<b>${q?'Ничего не найдено':'Заметок пока нет'}</b>${q?'Попробуйте другой запрос.':'Нажмите «Заметка», чтобы создать первую.'}</div>`));
   }else{
     $('notes-list').innerHTML=`<div class="group">${list.length?list.map(n=>`
-      <div class="row"><div style="flex:1;cursor:pointer" onclick="openNoteById(${n.id})"><div class="t">${esc(n.title||'Без названия')}</div><div class="s">${esc(n.preview)}</div></div>
-      <button class="btn sm" onclick="restoreNote(${n.id})">Вернуть</button>
-      <button class="btn sm danger" onclick="purgeNote(${n.id})">Удалить</button></div>`).join(''):'<div class="row muted" style="justify-content:center;padding:28px">Корзина пуста</div>'}</div>`;
+      <div class="row"><div style="flex:1;cursor:pointer" onclick="openNoteById('${n.id}')"><div class="t">${esc(n.title||'Без названия')}</div><div class="s">${esc(n.preview)}</div></div>
+      <button class="btn sm" onclick="restoreNote('${n.id}')">Вернуть</button>
+      <button class="btn sm danger" onclick="purgeNote('${n.id}')">Удалить</button></div>`).join(''):'<div class="row muted" style="justify-content:center;padding:28px">Корзина пуста</div>'}</div>`;
   }
 }
 function noteRowHtmlList(n){
   const meta=[fmtNoteDate(n.updated_at),n.preview?esc(n.preview):(n.has_check?'Список':'Без текста')].filter(Boolean).join('  ·  ');
-  return `<div class="note-row" onclick="openNoteById(${n.id})">
+  return `<div class="note-row" onclick="openNoteById('${n.id}')">
     <div class="nt">${n.pinned?`<span class="note-pin">${ic('pin',15)}</span>`:''}${esc(n.title||'Новая заметка')}</div>
     <div class="nm">${meta}</div>
   </div>`;
 }
 function newNote(){openNoteSheet(null)}
-function openNoteById(id){openNoteSheet(notesList.find(x=>x.id===id))}
+function openNoteById(id){openNoteSheet(notesList.find(x=>String(x.id)===String(id)))}
 function openNoteSheet(n){
   currentNoteId=n?n.id:null;
   noteRows=n?JSON.parse(JSON.stringify(n.body)):[{t:'text',x:'',c:false,i:0}];
@@ -1778,18 +2522,29 @@ async function noteFlush(){
   if(noteSaving)await noteSaving;
   const body={body:noteRows};
   if(!currentNoteId&&!noteRows.some(r=>(r.x||'').trim()))return;   // пустую новую заметку не создаём
+  if(isTmp(currentNoteId)&&tmpMap[currentNoteId])currentNoteId=tmpMap[currentNoteId];
+  if(isTmp(currentNoteId)){                        // заметка создана без сети и ещё не отправлена — обновляем её в очереди
+    const q=getOutbox(),it=q.find(x=>x.meta&&x.meta.tmpId===currentNoteId);
+    if(it){it.body=body;it.ts=Date.now();setOutbox(q)}
+    const i=notesList.findIndex(x=>x.id===currentNoteId);if(i>-1)notesList[i]=noteFromRows(currentNoteId,noteRows,Date.now());
+    return;
+  }
   noteSaving=(async()=>{if(currentNoteId){
     const r=await run(()=>api(`/api/notes/${currentNoteId}`,{method:'PUT',body}));
     if(r&&!r.queued){const i=notesList.findIndex(x=>x.id===currentNoteId);if(i>-1)notesList[i]=r;else notesList.unshift(r)}
   }else{
-    const r=await run(()=>api('/api/notes',{method:'POST',body}));
+    const tmpId=newTmp();
+    const r=await run(()=>api('/api/notes',{method:'POST',body,meta:{tmpId}}));
     if(r&&!r.queued){currentNoteId=r.id;notesList.unshift(r)}
+    else if(r&&r.queued){currentNoteId=tmpId;notesList.unshift(noteFromRows(tmpId,noteRows,Date.now()))}
   }})();
   try{await noteSaving}finally{noteSaving=null}
 }
 async function closeNoteSheet(){noteSheetOpen=false;await noteFlush();closeSheet();loadNotes()}
 async function pinCurrentNote(pinned){
   noteSheetOpen=false;await noteFlush();
+  if(isTmp(currentNoteId)&&tmpMap[currentNoteId])currentNoteId=tmpMap[currentNoteId];
+  if(isTmp(currentNoteId)){toast('Закрепить можно после отправки заметки');closeSheet();loadNotes();return}
   if(currentNoteId)await run(()=>api(`/api/notes/${currentNoteId}/pin`,{method:'POST',body:{pinned}}));
   toast(pinned?'Заметка закреплена':'Заметка откреплена');
   closeSheet();$('sheet').classList.remove('wide');loadNotes();
@@ -1798,7 +2553,9 @@ async function deleteCurrentNote(){
   if(!currentNoteId){noteSheetOpen=false;closeSheet();return}
   if(!await askConfirm('Удалить заметку?','Она перейдёт в корзину и будет храниться там 30 дней.','Удалить',true))return;
   clearTimeout(noteSaveTimer);noteSheetOpen=false;
-  await run(()=>api(`/api/notes/${currentNoteId}`,{method:'DELETE'}));
+  if(isTmp(currentNoteId)&&tmpMap[currentNoteId])currentNoteId=tmpMap[currentNoteId];
+  if(isTmp(currentNoteId)){const t=currentNoteId;dropQueued(x=>x.meta&&x.meta.tmpId===t);notesList=notesList.filter(x=>x.id!==t)}
+  else await run(()=>api(`/api/notes/${currentNoteId}`,{method:'DELETE'}));
   closeSheet();$('sheet').classList.remove('wide');loadNotes();
 }
 async function restoreNote(id){await run(()=>api(`/api/notes/${id}/restore`,{method:'POST'}));loadNotes()}
@@ -1873,8 +2630,7 @@ async function resetMenu(){
   if(r){menu=await api('/api/menu');toast('Меню сброшено');loadTeam()}
 }
 
-hydrateIcons();
-boot();
+hydrateIcons();applyGlow();boot();
 </script>
 </body>
 </html>

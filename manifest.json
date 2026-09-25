@@ -1,15 +1,17 @@
 {
-  "name": "Тугай ТТК — бар-менеджмент",
+  "name": "Тугай ТТК",
   "short_name": "Тугай",
-  "description": "ТТК, график смен, заявки, чек-листы и заметки бара «Тугай»",
+  "description": "Рабочее пространство бара «Тугай»: ТТК, график, отчёты, стоп-лист и объявления",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "portrait",
   "background_color": "#f5f5f7",
-  "theme_color": "#0071e3",
+  "theme_color": "#f5f5f7",
+  "lang": "ru",
   "icons": [
-    { "src": "/logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    {"src": "/logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}
   ]
 }

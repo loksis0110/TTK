@@ -1,94 +1,126 @@
-// Тугай ТТК — service worker: офлайн-доступ к оболочке приложения и последним данным API.
-const CACHE_NAME = 'tugai-v1';
-const SHELL = ['/', '/manifest.json', '/logo.png'];
+/* Тугай — service worker
+   1) Офлайн: приложение открывается без сети, данные берутся из последней сохранённой копии.
+   2) Push-уведомления (в том числе на iPhone с iOS 16.4+, если сайт добавлен на экран «Домой»). */
+const VERSION = 'tugai-v4';
+const SHELL = `${VERSION}-shell`;
+const API = 'tugai-api';        // без версии: данные переживают обновление приложения
+const IMG = 'tugai-img';
+const SHELL_FILES = ['/', '/manifest.json', '/logo.png'];
+const NET_TIMEOUT = 4500;        // медленный Wi-Fi в баре: через 4.5 с показываем сохранённое
 
-self.addEventListener('install', (event) => {
-  self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL).catch(() => {}))
-  );
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(SHELL).then(c => Promise.all(SHELL_FILES.map(u => c.add(new Request(u, {cache: 'reload'})).catch(() => {}))))
+    .then(() => self.skipWaiting()));
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => Promise.all(
-      keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
-    )).then(() => self.clients.claim())
-  );
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys
+    .filter(k => k.startsWith('tugai-v') && k !== SHELL).map(k => caches.delete(k))))
+    .then(() => self.clients.claim()));
 });
 
-// Сеть -> кэш (свежие данные когда есть связь, последний известный ответ — когда нет)
-async function networkFirst(request) {
-  const cache = await caches.open(CACHE_NAME);
+function timeout(ms) { return new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)); }
+
+async function networkFirst(req, cacheName, ms) {
+  const cache = await caches.open(cacheName);
   try {
-    const fresh = await fetch(request);
-    if (fresh && fresh.ok) cache.put(request, fresh.clone());
-    return fresh;
+    const res = await Promise.race([fetch(req), timeout(ms)]);
+    if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
+    return res;
   } catch (err) {
-    const cached = await cache.match(request);
-    if (cached) return cached;
+    const hit = await cache.match(req, {ignoreVary: true});
+    if (hit) {
+      // Помечаем ответ как «из офлайн-копии», чтобы приложение показало это пользователю.
+      const h = new Headers(hit.headers); h.set('X-Tugai-Offline', '1');
+      return new Response(await hit.blob(), {status: hit.status, statusText: hit.statusText, headers: h});
+    }
     throw err;
   }
 }
 
-// Кэш -> сеть (для статики/оболочки: мгновенная загрузка, обновление в фоне)
-async function cacheFirst(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-  const network = fetch(request).then((res) => {
-    if (res && res.ok) cache.put(request, res.clone());
-    return res;
-  }).catch(() => null);
-  return cached || network || caches.match('/');
+async function cacheFirst(req, cacheName) {
+  const cache = await caches.open(cacheName);
+  const hit = await cache.match(req);
+  if (hit) return hit;
+  const res = await fetch(req);
+  if (res && res.ok) {
+    cache.put(req, res.clone()).catch(() => {});
+    trim(cacheName, 400);
+  }
+  return res;
 }
 
-// Push-уведомления
-self.addEventListener('push', (event) => {
-  let data = { title: 'Тугай ТТК', body: 'У вас новое уведомление', url: '/' };
-  try {
-    if (event.data) data = { ...data, ...event.data.json() };
-  } catch (err) {}
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: '/logo.png',
-      badge: '/logo.png',
-      data: { url: data.url || '/' },
-      vibrate: [80, 40, 80],
-    })
-  );
-});
+async function staleWhileRevalidate(req, cacheName) {
+  const cache = await caches.open(cacheName);
+  const hit = await cache.match(req);
+  const net = fetch(req).then(res => { if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()).catch(() => {}); return res; }).catch(() => hit);
+  return hit || net;
+}
 
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if ('focus' in client) {
-          client.navigate(url).catch(() => {});
-          return client.focus();
-        }
-      }
-      if (self.clients.openWindow) return self.clients.openWindow(url);
-    })
-  );
-});
+async function trim(cacheName, max) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  for (let i = 0; i < keys.length - max; i++) await cache.delete(keys[i]);
+}
 
-self.addEventListener('fetch', (event) => {
-  const req = event.request;
+self.addEventListener('fetch', e => {
+  const req = e.request;
+  if (req.method !== 'GET') return;                               // запись идёт мимо кэша (очередь — в приложении)
   const url = new URL(req.url);
 
-  // Мутации (POST/PUT/DELETE) не перехватываем — их офлайн-очередь ведёт сама страница.
-  if (req.method !== 'GET') return;
-  if (url.origin !== location.origin) return;
-
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirst(req));
+  if (url.origin !== location.origin) {                           // шрифты и т.п.
+    if (/fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)) e.respondWith(staleWhileRevalidate(req, SHELL));
     return;
   }
-
-  if (url.pathname === '/' || url.pathname === '/manifest.json' || url.pathname === '/logo.png' || url.pathname === '/sw.js') {
-    event.respondWith(cacheFirst(req));
+  if (req.mode === 'navigate' || url.pathname === '/') {
+    e.respondWith(networkFirst(new Request('/'), SHELL, NET_TIMEOUT).catch(() => caches.match('/')));
+    return;
   }
+  if (url.pathname.startsWith('/api/archives/') && url.pathname.endsWith('/download')) return;   // ZIP не кэшируем
+  if (/^\/api\/.*\/file$/.test(url.pathname)) { e.respondWith(cacheFirst(req, IMG)); return; }  // фото не меняются
+  if (url.pathname.startsWith('/api/')) {
+    e.respondWith(networkFirst(req, API, NET_TIMEOUT).catch(() =>
+      new Response(JSON.stringify({detail: 'Нет соединения — эти данные ещё не сохранены на телефоне'}),
+        {status: 503, headers: {'Content-Type': 'application/json', 'X-Tugai-Offline': '1'}})));
+    return;
+  }
+  e.respondWith(staleWhileRevalidate(req, SHELL));
+});
+
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'clear-data') {
+    e.waitUntil(Promise.all([caches.delete(API), caches.delete(IMG)]));
+  }
+});
+
+/* ---------- PUSH ---------- */
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = {body: e.data ? e.data.text() : ''}; }
+  const title = d.title || 'Тугай';
+  const opts = {
+    body: d.body || '',
+    icon: '/logo.png',
+    badge: '/logo.png',
+    tag: d.tag || undefined,
+    renotify: !!d.tag,
+    data: {url: d.url || '/'},
+  };
+  // iOS требует показывать уведомление на КАЖДЫЙ пуш — иначе отзывает подписку.
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const target = new URL((e.notification.data && e.notification.data.url) || '/', self.location.origin).href;
+  e.waitUntil((async () => {
+    const list = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
+    for (const c of list) {
+      if (new URL(c.url).origin === self.location.origin) {
+        c.postMessage({type: 'open', url: target});
+        return c.focus();
+      }
+    }
+    return self.clients.openWindow(target);
+  })());
 });

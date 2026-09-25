@@ -9,6 +9,8 @@ import secrets
 import re
 import time
 import zipfile
+import threading
+import asyncio
 from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager, contextmanager, AsyncExitStack
 from typing import Optional, List
@@ -46,6 +48,7 @@ MASTER_PASSWORD = "admin123"
 # Фото смены: храним рядом с базой (на том же примонтированном volume в Railway), чтобы не терять файлы при деплое.
 PHOTOS_DIR = os.getenv("PHOTOS_DIR") or os.path.join(os.path.dirname(os.path.abspath(DB_PATH)) or ".", "shift_photos")
 PHOTO_REMINDER_MINUTES = 5                  # напомнить за 5 минут до срока
+LATE_REPORT_MINUTES = 15                    # через 15 минут без отчёта — сообщить руководству
 
 # Стена позора: фото + подпись + отметка сотрудника + комментарии.
 SHAME_DIR = os.getenv("SHAME_DIR") or os.path.join(os.path.dirname(os.path.abspath(DB_PATH)) or ".", "shame_photos")
@@ -497,6 +500,20 @@ def init_db():
             c.execute("ALTER TABLE archives ADD COLUMN summary TEXT NOT NULL DEFAULT ''")
         except sqlite3.OperationalError:
             pass
+        # Стоп-лист: позиции меню (или произвольные товары), которые сейчас нельзя продавать.
+        c.execute("""CREATE TABLE IF NOT EXISTS stop_list (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, menu_item_id INTEGER, name TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '', user_id INTEGER, created_at INTEGER NOT NULL)""")
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_stop_menu ON stop_list(menu_item_id) WHERE menu_item_id IS NOT NULL")
+
+        # Лента объявлений от руководства + отметки «ознакомлен».
+        c.execute("""CREATE TABLE IF NOT EXISTS announcements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL DEFAULT '',
+            body TEXT NOT NULL DEFAULT '', pinned INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, edited_at INTEGER)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS announcement_reads (
+            announcement_id INTEGER NOT NULL, user_id INTEGER NOT NULL, read_at INTEGER NOT NULL,
+            PRIMARY KEY (announcement_id, user_id))""")
+
         # Служебные значения (например, время следующей архивации) — переживают перезапуски и деплои.
         c.execute("CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         if not c.execute("SELECT 1 FROM app_meta WHERE key='next_archive_at'").fetchone():
@@ -622,31 +639,62 @@ class PushUnsubscribeIn(BaseModel):
 
 
 # ======================= PUSH-УВЕДОМЛЕНИЯ =======================
-def send_push(user_ids: List[int], title: str, body: str, url: str = "/"):
-    """Отправляет браузерный push пользователям. Молча ничего не делает, если VAPID-ключи не заданы."""
-    if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY or not user_ids:
-        return
-    payload = json.dumps({"title": title, "body": body, "url": url}, ensure_ascii=False)
+# Важно для iPhone: Apple принимает пуши только с корректным VAPID «sub» (mailto: реального адреса или https-URL),
+# поэтому VAPID_CLAIMS_EMAIL нужно задать своим адресом. TTL > 0 — чтобы пуш дошёл, если телефон был не в сети.
+PUSH_TTL = 24 * 3600
+
+
+def _push_now(user_ids: List[int], title: str, body: str, url: str = "/", tag: Optional[str] = None) -> dict:
+    """Синхронная отправка. Возвращает подробный отчёт — используется и в фоне, и в «тестовом пуше»."""
+    report = {"configured": bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY), "devices": 0, "sent": 0, "errors": []}
+    if not report["configured"] or not user_ids:
+        return report
+    payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag or url}, ensure_ascii=False)
     with db() as c:
         q = ",".join("?" * len(user_ids))
-        subs = c.execute(f"SELECT * FROM push_subscriptions WHERE user_id IN ({q})", user_ids).fetchall()
-        for s in subs:
-            try:
-                webpush(
-                    subscription_info={
-                        "endpoint": s["endpoint"],
-                        "keys": {"p256dh": s["p256dh"], "auth": s["auth"]},
-                    },
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims={"sub": VAPID_CLAIMS_EMAIL},
-                )
-            except WebPushException as e:
-                code = getattr(e.response, "status_code", None)
-                if code in (404, 410):
-                    c.execute("DELETE FROM push_subscriptions WHERE id=?", (s["id"],))
-                else:
-                    logger.warning(f"Push не доставлен: {e}")
+        subs = c.execute(f"SELECT * FROM push_subscriptions WHERE user_id IN ({q})", list(user_ids)).fetchall()
+    report["devices"] = len(subs)
+    dead = []
+    for s in subs:
+        try:
+            webpush(
+                subscription_info={"endpoint": s["endpoint"], "keys": {"p256dh": s["p256dh"], "auth": s["auth"]}},
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_CLAIMS_EMAIL},   # новый словарь на каждую отправку: pywebpush дописывает в него aud
+                ttl=PUSH_TTL,
+                headers={"Urgency": "high"},
+                timeout=10,
+            )
+            report["sent"] += 1
+        except WebPushException as e:
+            code = getattr(e.response, "status_code", None)
+            text = (getattr(e.response, "text", "") or str(e))[:200]
+            host = s["endpoint"].split("/")[2] if "//" in s["endpoint"] else s["endpoint"][:40]
+            report["errors"].append({"status": code, "host": host, "detail": text})
+            if code in (404, 410):
+                dead.append(s["id"])
+            logger.warning(f"Push не доставлен ({host}, {code}): {text}")
+        except Exception as e:
+            report["errors"].append({"status": None, "host": "", "detail": str(e)[:200]})
+            logger.warning(f"Push: ошибка отправки: {e}")
+    if dead:
+        with db() as c:
+            c.executemany("DELETE FROM push_subscriptions WHERE id=?", [(i,) for i in dead])
+    return report
+
+
+def send_push(user_ids: List[int], title: str, body: str, url: str = "/", tag: Optional[str] = None):
+    """Отправляет пуш в фоне — запрос пользователя не ждёт сетевого ответа от Apple/Google."""
+    ids = sorted({int(u) for u in user_ids or [] if u})
+    if not ids or not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
+        return
+    threading.Thread(target=_push_now, args=(ids, title, body, url, tag), daemon=True).start()
+
+
+def approved_ids(c, exclude: Optional[int] = None, roles: Optional[set] = None) -> List[int]:
+    rows = c.execute("SELECT id, role FROM users WHERE status='approved'").fetchall()
+    return [r["id"] for r in rows if r["id"] != exclude and (roles is None or r["role"] in roles)]
 
 
 # ======================= TELEGRAM (только 07:00) =======================
@@ -724,6 +772,22 @@ async def push_public_key():
     return {"key": VAPID_PUBLIC_KEY}
 
 
+@app.get("/api/push/status")
+async def push_status(user: dict = Depends(current_user)):
+    with db() as c:
+        n = c.execute("SELECT COUNT(*) FROM push_subscriptions WHERE user_id=?", (user["id"],)).fetchone()[0]
+    return {"configured": bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY), "devices": n,
+            "claims_ok": VAPID_CLAIMS_EMAIL.startswith(("mailto:", "https://")) and "example.com" not in VAPID_CLAIMS_EMAIL}
+
+
+@app.post("/api/push/test")
+async def push_test(user: dict = Depends(current_user)):
+    """Тестовый пуш себе — с подробным ответом сервисов Apple/Google, чтобы сразу видеть причину проблемы."""
+    report = await asyncio.to_thread(_push_now, [user["id"]], "Тугай", "Уведомления работают ✅", "/", "test")
+    report["claims_ok"] = VAPID_CLAIMS_EMAIL.startswith(("mailto:", "https://")) and "example.com" not in VAPID_CLAIMS_EMAIL
+    return report
+
+
 @app.post("/api/push/subscribe")
 async def push_subscribe(body: PushSubscribeIn, user: dict = Depends(current_user)):
     with db() as c:
@@ -756,6 +820,8 @@ async def register(body: RegisterIn):
             raise HTTPException(409, "Такой логин уже занят")
         c.execute("INSERT INTO users (username, name, password, role, status, created_at) VALUES (?,?,?,?,?,?)",
                   (username, name, hash_pw(body.password), "", "pending", now_msk()))
+        admins = approved_ids(c, roles=ADMIN_ROLES)
+    send_push(admins, "Новая регистрация", f"{name} ждёт подтверждения аккаунта", "/#team", "pending")
     return {"status": "pending"}
 
 
@@ -885,6 +951,7 @@ async def add_menu_item(item: MenuItemBase, admin: dict = Depends(require_admin)
 async def delete_menu_item(item_id: int, admin: dict = Depends(require_admin)):
     with db() as c:
         c.execute("DELETE FROM menu_items WHERE id=?", (item_id,))
+        c.execute("DELETE FROM stop_list WHERE menu_item_id=?", (item_id,))
     return {"status": "success"}
 
 
@@ -892,6 +959,7 @@ async def delete_menu_item(item_id: int, admin: dict = Depends(require_admin)):
 async def reset_menu(admin: dict = Depends(require_admin)):
     with db() as c:
         c.execute("DROP TABLE IF EXISTS menu_items")
+        c.execute("DELETE FROM stop_list WHERE menu_item_id IS NOT NULL")
     init_db()
     return {"status": "success"}
 
@@ -1071,6 +1139,7 @@ async def delete_shift(sid: int, actor: dict = Depends(require_schedule_editor))
         s = get_shift(c, sid)
         c.execute("DELETE FROM shifts WHERE id=?", (sid,))
         log_change(c, actor, "delete", f"Удалена смена: {fmt_shift(s)}", s, None)
+    send_push([s["user_id"]], "Смена отменена", f"Снята смена: {fmt_shift(s)}", "/#schedule", "schedule")
     return {"status": "success"}
 
 
@@ -1123,8 +1192,71 @@ async def clear_week(body: WeekIn, actor: dict = Depends(require_schedule_editor
     return {"deleted": len(rows)}
 
 
+class BulkOp(BaseModel):
+    op: str                     # set — заменить смены сотрудника в этот день; add — добавить; clear — убрать все; delete — по id
+    user_id: Optional[int] = None
+    date: Optional[str] = None
+    start: str = ""
+    end: str = ""
+    note: str = ""
+    id: Optional[int] = None
+
+
+class BulkIn(BaseModel):
+    ops: List[BulkOp] = []
+
+
+@app.post("/api/schedule/bulk")
+async def bulk_schedule(body: BulkIn, actor: dict = Depends(require_schedule_editor)):
+    """Сохраняет сразу пачку изменений графика (режим «кисти» и офлайн-очередь).
+    Одна запись в истории (её можно отменить) и одно уведомление каждому затронутому сотруднику."""
+    if len(body.ops) > 500:
+        raise HTTPException(400, "Слишком много изменений за раз")
+    removed, added, touched = [], [], {}
+    with db() as c:
+        for o in body.ops:
+            if o.op == "delete":
+                if not o.id or not shift_exists(c, o.id):
+                    continue
+                s = get_shift(c, o.id)
+                c.execute("DELETE FROM shifts WHERE id=?", (o.id,))
+                removed.append(s)
+                touched.setdefault(s["user_id"], set()).add(s["date"])
+                continue
+            if o.op not in ("set", "add", "clear") or not o.user_id or not o.date:
+                raise HTTPException(400, "Неизвестное изменение графика")
+            parse_day(o.date)
+            if o.op != "clear":
+                check_times(o.start, o.end)
+                check_user(c, o.user_id)
+            existing = [shift_dict(r) for r in c.execute(SHIFT_SQL + " WHERE s.day=? AND s.user_id=?", (o.date, o.user_id)).fetchall()]
+            note = (o.note or "").strip()[:200]
+            if o.op == "set" and len(existing) == 1 and existing[0]["start"] == o.start and existing[0]["end"] == o.end \
+                    and existing[0]["note"] == note:
+                continue                                        # уже так — ничего не меняем
+            if o.op == "add" and any(x["start"] == o.start and x["end"] == o.end for x in existing):
+                continue
+            if o.op in ("set", "clear"):
+                for s in existing:
+                    c.execute("DELETE FROM shifts WHERE id=?", (s["id"],))
+                    removed.append(s)
+            if o.op in ("set", "add"):
+                sid = c.execute("INSERT INTO shifts (day, user_id, start_time, end_time, note) VALUES (?,?,?,?,?)",
+                                (o.date, o.user_id, o.start, o.end, note)).lastrowid
+                added.append(get_shift(c, sid))
+            touched.setdefault(o.user_id, set()).add(o.date)
+        if added or removed:
+            log_change(c, actor, "bulk", f"Изменён график: добавлено {len(added)}, снято {len(removed)}", removed, added)
+    for uid, days in touched.items():
+        if uid == actor["id"] or not any(x["user_id"] == uid for x in added + removed):
+            continue
+        dates = ", ".join(ddmm(d) for d in sorted(days)[:6]) + ("…" if len(days) > 6 else "")
+        send_push([uid], "График обновлён", f"Изменения в ваших сменах: {dates}", "/#schedule", "schedule")
+    return {"added": len(added), "removed": len(removed), "shifts": added}
+
+
 # ---------- отмена изменений графика ----------
-UNDOABLE = {"add", "edit", "delete", "swap", "copy", "clear"}
+UNDOABLE = {"add", "edit", "delete", "swap", "copy", "clear", "bulk"}
 
 
 def shift_exists(c, sid) -> bool:
@@ -1176,6 +1308,11 @@ def apply_undo(c, actor: dict, h):
     elif action == "clear":
         if sum(1 for s in before if restore_shift(c, s)) == 0:
             raise HTTPException(409, "Смены уже возвращены или сотрудники удалены")
+    elif action == "bulk":
+        for s in after or []:
+            c.execute("DELETE FROM shifts WHERE id=?", (s["id"],))
+        for s in before or []:
+            restore_shift(c, s)
     c.execute("UPDATE schedule_history SET undone=1 WHERE id=?", (h["id"],))
     log_change(c, actor, "undo", f"Отменено: {h['description']}")
 
@@ -1194,7 +1331,7 @@ async def undo_entry(hid: int, actor: dict = Depends(require_schedule_editor)):
 async def undo_last(actor: dict = Depends(require_schedule_editor)):
     with db() as c:
         h = c.execute("""SELECT * FROM schedule_history WHERE undone=0
-                         AND action IN ('add','edit','delete','swap','copy','clear') ORDER BY id DESC LIMIT 1""").fetchone()
+                         AND action IN ('add','edit','delete','swap','copy','clear','bulk') ORDER BY id DESC LIMIT 1""").fetchone()
         if not h:
             raise HTTPException(404, "Нечего отменять")
         apply_undo(c, actor, h)
@@ -1507,29 +1644,35 @@ async def remind_photo_now(shift_id: int = Form(...), slot: str = Form(...), act
 
 
 async def check_photo_reminders():
-    """Каждую минуту: если до обязательного фото осталось PHOTO_REMINDER_MINUTES — шлём пуш один раз."""
+    """Каждую минуту: за PHOTO_REMINDER_MINUTES до срока — пуш сотруднику; через LATE_REPORT_MINUTES после срока,
+    если отчёта так и нет, — пуш старшему бармену / бар-менеджеру / мастеру. Каждое напоминание — один раз."""
     now = datetime.now(MSK).replace(second=0, microsecond=0)
     today = now.strftime("%Y-%m-%d")
     yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    to_send = []
     with db() as c:
         rows = c.execute(SHIFT_SQL + " WHERE s.day IN (?,?)", (today, yesterday)).fetchall()
+        team = approved_ids(c, roles=TEAM_ROLES)
         for r in rows:
             s = shift_dict(r)
             if not s["user_id"]:
                 continue
             for cp in photo_checkpoints_for_shift(s):
-                remind_at = (cp["due_dt"] - timedelta(minutes=PHOTO_REMINDER_MINUTES)).replace(second=0, microsecond=0)
-                # Окно, а не точное совпадение минуты: если задача запустилась с опозданием, напоминание не теряется.
-                if not (remind_at <= now < cp["due_dt"]):
-                    continue
-                if c.execute("SELECT 1 FROM photo_reminders_sent WHERE shift_id=? AND slot=?", (s["id"], cp["slot"])).fetchone():
-                    continue
-                # Отчёт уже загружен заранее — напоминать не о чем.
                 if c.execute("SELECT 1 FROM shift_reports WHERE shift_id=? AND slot=?", (s["id"], cp["slot"])).fetchone():
-                    continue
-                c.execute("INSERT OR IGNORE INTO photo_reminders_sent (shift_id, slot) VALUES (?,?)", (s["id"], cp["slot"]))
-                send_push([s["user_id"]], "Фото бара",
-                          f"Через {PHOTO_REMINDER_MINUTES} мин нужно сфотографировать бар (к {cp['slot']})", "/#photos")
+                    continue                                   # отчёт уже есть — напоминать не о чем
+                remind_at = cp["due_dt"] - timedelta(minutes=PHOTO_REMINDER_MINUTES)
+                late_at = cp["due_dt"] + timedelta(minutes=LATE_REPORT_MINUTES)
+                # Окна, а не точное совпадение минуты: если задача запустилась с опозданием, напоминание не теряется.
+                if remind_at <= now < cp["due_dt"] and c.execute(
+                        "INSERT OR IGNORE INTO photo_reminders_sent (shift_id, slot) VALUES (?,?)", (s["id"], cp["slot"])).rowcount:
+                    to_send.append(([s["user_id"]], "Фото бара",
+                                    f"Через {PHOTO_REMINDER_MINUTES} мин нужно сфотографировать бар (к {cp['slot']})"))
+                if late_at <= now < late_at + timedelta(hours=2) and c.execute(
+                        "INSERT OR IGNORE INTO photo_reminders_sent (shift_id, slot) VALUES (?,?)", (s["id"], "late:" + cp["slot"])).rowcount:
+                    to_send.append(([u for u in team if u != s["user_id"]], "Нет отчёта",
+                                    f"{s['user_name']} не прислал(а) отчёт к {cp['slot']}"))
+    for ids, title, text in to_send:
+        send_push(ids, title, text, "/#photos", "photos")
 
 
 # ======================= СТЕНА ПОЗОРА =======================
@@ -1924,6 +2067,201 @@ async def force_archive(actor: dict = Depends(require_team)):
     result = await run_archiving(manual=True)
     logger.info(f"Принудительная архивация запущена пользователем {actor['name']}")
     return {"status": "success", "archived": result}
+
+
+# ======================= СТОП-ЛИСТ =======================
+class StopIn(BaseModel):
+    menu_item_id: Optional[int] = None
+    name: str = ""
+    note: str = ""
+
+
+def stop_dict(r, umap: dict) -> dict:
+    return {"id": r["id"], "menu_item_id": r["menu_item_id"], "name": r["name"], "note": r["note"] or "",
+            "user_name": umap.get(r["user_id"], ""), "created_at": r["created_at"]}
+
+
+@app.get("/api/stoplist")
+async def get_stoplist(user: dict = Depends(current_user)):
+    with db() as c:
+        umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
+        rows = c.execute("SELECT * FROM stop_list ORDER BY created_at DESC").fetchall()
+    return [stop_dict(r, umap) for r in rows]
+
+
+@app.post("/api/stoplist")
+async def add_stop(body: StopIn, actor: dict = Depends(require_not_waiter)):
+    """Ставит позицию в стоп. Повторная постановка той же позиции ничего не дублирует."""
+    note = body.note.strip()[:200]
+    with db() as c:
+        if body.menu_item_id:
+            m = c.execute("SELECT title FROM menu_items WHERE id=?", (body.menu_item_id,)).fetchone()
+            if not m:
+                raise HTTPException(404, "Позиция меню не найдена")
+            name = m["title"]
+            old = c.execute("SELECT * FROM stop_list WHERE menu_item_id=?", (body.menu_item_id,)).fetchone()
+            if old:
+                if note != (old["note"] or ""):
+                    c.execute("UPDATE stop_list SET note=? WHERE id=?", (note, old["id"]))
+                return {"status": "success", "id": old["id"], "existed": True}
+        else:
+            name = body.name.strip()[:80]
+            if not name:
+                raise HTTPException(400, "Укажите, что закончилось")
+            old = find_custom_stop(c, name)
+            if old:
+                return {"status": "success", "id": old["id"], "existed": True}
+        sid = c.execute("INSERT INTO stop_list (menu_item_id, name, note, user_id, created_at) VALUES (?,?,?,?,?)",
+                        (body.menu_item_id, name, note, actor["id"], int(time.time()))).lastrowid
+        others = approved_ids(c, exclude=actor["id"])
+    send_push(others, "Стоп-лист", f"⛔ {name}" + (f" — {note}" if note else "") + f" · {actor['name']}", "/#drinks", "stop")
+    return {"status": "success", "id": sid}
+
+
+def find_custom_stop(c, name: str):
+    """Поиск «своей» позиции без учёта регистра. SQLite lower() не понимает кириллицу, поэтому сравниваем в Python."""
+    key = (name or "").strip().casefold()
+    for r in c.execute("SELECT * FROM stop_list WHERE menu_item_id IS NULL").fetchall():
+        if r["name"].strip().casefold() == key:
+            return r
+    return None
+
+
+def _remove_stop(c, row, actor: dict):
+    c.execute("DELETE FROM stop_list WHERE id=?", (row["id"],))
+    return approved_ids(c, exclude=actor["id"]), row["name"]
+
+
+@app.delete("/api/stoplist/{stop_id}")
+async def remove_stop(stop_id: int, actor: dict = Depends(require_not_waiter)):
+    with db() as c:
+        r = c.execute("SELECT * FROM stop_list WHERE id=?", (stop_id,)).fetchone()
+        if not r:
+            return {"status": "success"}          # уже снято (например, с другого телефона) — не ошибка
+        others, name = _remove_stop(c, r, actor)
+    send_push(others, "Снова в наличии", f"✅ {name}", "/#drinks", "stop")
+    return {"status": "success"}
+
+
+@app.delete("/api/stoplist/menu/{menu_item_id}")
+async def remove_stop_by_menu(menu_item_id: int, actor: dict = Depends(require_not_waiter)):
+    """Снять со стопа по позиции меню — удобно из карточки и для офлайн-очереди (id записи там неизвестен)."""
+    with db() as c:
+        r = c.execute("SELECT * FROM stop_list WHERE menu_item_id=?", (menu_item_id,)).fetchone()
+        if not r:
+            return {"status": "success"}
+        others, name = _remove_stop(c, r, actor)
+    send_push(others, "Снова в наличии", f"✅ {name}", "/#drinks", "stop")
+    return {"status": "success"}
+
+
+@app.delete("/api/stoplist/name/{name}")
+async def remove_stop_by_name(name: str, actor: dict = Depends(require_not_waiter)):
+    """Снять со стопа произвольную позицию по названию — для офлайн-очереди."""
+    with db() as c:
+        r = find_custom_stop(c, name)
+        if not r:
+            return {"status": "success"}
+        others, nm = _remove_stop(c, r, actor)
+    send_push(others, "Снова в наличии", f"✅ {nm}", "/#drinks", "stop")
+    return {"status": "success"}
+
+
+# ======================= ОБЪЯВЛЕНИЯ =======================
+class AnnouncementIn(BaseModel):
+    title: str = ""
+    body: str = ""
+    pinned: bool = False
+
+
+def ann_can_edit(user: dict, r) -> bool:
+    return user["id"] == r["user_id"] or user["role"] in ADMIN_ROLES
+
+
+@app.get("/api/announcements")
+async def list_announcements(user: dict = Depends(current_user)):
+    team = user["role"] in TEAM_ROLES
+    with db() as c:
+        umap = {u["id"]: u["name"] for u in c.execute("SELECT id, name FROM users").fetchall()}
+        staff = {r["id"]: r["name"] for r in c.execute("SELECT id, name FROM users WHERE status='approved' AND role<>'master'").fetchall()}
+        rows = c.execute("SELECT * FROM announcements ORDER BY pinned DESC, created_at DESC LIMIT 200").fetchall()
+        out = []
+        for r in rows:
+            reads = {x["user_id"]: x["read_at"] for x in c.execute(
+                "SELECT user_id, read_at FROM announcement_reads WHERE announcement_id=?", (r["id"],)).fetchall()}
+            item = {"id": r["id"], "title": r["title"], "body": r["body"], "pinned": bool(r["pinned"]),
+                    "created_at": r["created_at"], "edited_at": r["edited_at"], "user_id": r["user_id"],
+                    "user_name": umap.get(r["user_id"], "Удалён"),
+                    "read": r["user_id"] == user["id"] or user["id"] in reads, "read_at": reads.get(user["id"]),
+                    "can_edit": ann_can_edit(user, r)}
+            if team:
+                audience = {uid: n for uid, n in staff.items() if uid != r["user_id"]}
+                item["readers"] = sorted([{"name": n, "read_at": reads[uid]} for uid, n in audience.items() if uid in reads],
+                                         key=lambda x: x["read_at"])
+                item["not_read"] = sorted(n for uid, n in audience.items() if uid not in reads)
+            out.append(item)
+    return out
+
+
+@app.get("/api/announcements/unread")
+async def unread_announcements(user: dict = Depends(current_user)):
+    with db() as c:
+        n = c.execute("""SELECT COUNT(*) FROM announcements a WHERE a.user_id<>? AND NOT EXISTS
+                         (SELECT 1 FROM announcement_reads r WHERE r.announcement_id=a.id AND r.user_id=?)""",
+                      (user["id"], user["id"])).fetchone()[0]
+    return {"count": n}
+
+
+@app.post("/api/announcements")
+async def create_announcement(body: AnnouncementIn, actor: dict = Depends(require_team)):
+    title, text = body.title.strip()[:120], body.body.strip()[:4000]
+    if not title and not text:
+        raise HTTPException(400, "Напишите заголовок или текст объявления")
+    with db() as c:
+        aid = c.execute("INSERT INTO announcements (user_id, title, body, pinned, created_at) VALUES (?,?,?,?,?)",
+                        (actor["id"], title, text, int(body.pinned), int(time.time()))).lastrowid
+        others = approved_ids(c, exclude=actor["id"])
+    send_push(others, "📣 " + (title or "Новое объявление"), (text or title)[:140], "/#news", f"ann{aid}")
+    return {"status": "success", "id": aid}
+
+
+@app.put("/api/announcements/{aid}")
+async def edit_announcement(aid: int, body: AnnouncementIn, user: dict = Depends(current_user)):
+    title, text = body.title.strip()[:120], body.body.strip()[:4000]
+    if not title and not text:
+        raise HTTPException(400, "Напишите заголовок или текст объявления")
+    with db() as c:
+        r = c.execute("SELECT * FROM announcements WHERE id=?", (aid,)).fetchone()
+        if not r:
+            raise HTTPException(404, "Объявление не найдено")
+        if not ann_can_edit(user, r):
+            raise HTTPException(403, "Изменять объявление может автор или администратор")
+        c.execute("UPDATE announcements SET title=?, body=?, pinned=?, edited_at=? WHERE id=?",
+                  (title, text, int(body.pinned), int(time.time()), aid))
+    return {"status": "success"}
+
+
+@app.delete("/api/announcements/{aid}")
+async def delete_announcement(aid: int, user: dict = Depends(current_user)):
+    with db() as c:
+        r = c.execute("SELECT * FROM announcements WHERE id=?", (aid,)).fetchone()
+        if not r:
+            return {"status": "success"}
+        if not ann_can_edit(user, r):
+            raise HTTPException(403, "Удалять объявление может автор или администратор")
+        c.execute("DELETE FROM announcement_reads WHERE announcement_id=?", (aid,))
+        c.execute("DELETE FROM announcements WHERE id=?", (aid,))
+    return {"status": "success"}
+
+
+@app.post("/api/announcements/{aid}/read")
+async def read_announcement(aid: int, user: dict = Depends(current_user)):
+    with db() as c:
+        if not c.execute("SELECT 1 FROM announcements WHERE id=?", (aid,)).fetchone():
+            return {"status": "success"}
+        c.execute("INSERT OR IGNORE INTO announcement_reads (announcement_id, user_id, read_at) VALUES (?,?,?)",
+                  (aid, user["id"], int(time.time())))
+    return {"status": "success"}
 
 
 # ======================= ЧЕК-ЛИСТ СМЕНЫ =======================
