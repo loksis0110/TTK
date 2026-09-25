@@ -285,6 +285,7 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
       <button class="tab" data-t="schedule">График</button>
       <button class="tab" data-t="orders">Заявки</button>
       <button class="tab" data-t="checklist">Чек-лист</button>
+      <button class="tab" data-t="photos">Фото</button>
       <button class="tab" data-t="notes">Заметки</button>
       <button class="tab hidden" data-t="team" id="tab-team">Команда<span class="badge hidden" id="pending-badge"></span></button>
     </nav>
@@ -379,6 +380,12 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
       </div>
       <div class="info hidden" id="cl-note"></div>
       <div class="group" id="cl-items"></div>
+    </section>
+
+    <!-- ФОТО СМЕНЫ -->
+    <section class="view" id="view-photos">
+      <div class="hero"><span class="eyebrow">СМЕНА</span><h1>Фото бара</h1><p>Дневная смена — фото в 12:00 и в 20:00. Ночная — фото в 8:00. Напомним за 5 минут.</p></div>
+      <div class="group" id="photo-list"></div>
     </section>
 
     <!-- ЗАМЕТКИ -->
@@ -488,6 +495,7 @@ async function flushOutbox(){
 function reloadTab(){
   if(tab==='orders')fetchOrders();
   else if(tab==='checklist')loadChecklist();
+  else if(tab==='photos')loadPhotos();
   else if(tab==='notes')loadNotes();
   else if(tab==='schedule')({month:loadMonth,week:loadWeek,history:loadHistory})[schView]();
   else if(tab==='team')loadTeam();
@@ -643,6 +651,7 @@ function go(t){
   if(t==='schedule'){run(async()=>{staffList=await api('/api/staff')});({month:loadMonth,week:loadWeek,history:loadHistory})[schView]()}
   if(t==='orders')fetchOrders();
   if(t==='checklist')loadChecklist();
+  if(t==='photos')loadPhotos();
   if(t==='notes')loadNotes();
   if(t==='team')loadTeam();
   window.scrollTo({top:0});
@@ -893,6 +902,44 @@ function clEditNote(){
 async function clSaveNote(){
   const r=await run(()=>api(`/api/checklist/${clShift}/note`,{method:'PUT',body:{note:$('cl-note-f').value}}));
   if(r){closeSheet();toast('Сохранено');loadChecklist()}
+}
+
+/* ---------- ФОТО СМЕНЫ ---------- */
+let photoShifts=[];
+async function loadPhotos(){
+  const r=await run(()=>api('/api/shifts/photos/status'));if(!r)return;
+  photoShifts=r;renderPhotos();
+}
+function renderPhotos(){
+  $('photo-list').innerHTML=photoShifts.length?photoShifts.map(s=>{
+    const mine=me&&(me.id===s.user_id||isAdmin());
+    return `<div class="panel">
+      <h3>${esc(s.user_name)} · ${esc(s.start)}–${esc(s.end)}</h3>
+      <div class="group" style="margin-top:10px">
+        ${s.checkpoints.map(cp=>`
+          <div class="row">
+            <div>
+              <div class="t">${cp.uploaded?'✅':(cp.overdue?'❗':'⏳')} Фото к ${esc(cp.due_at)}</div>
+              <div class="s">${cp.uploaded?'Загружено':(cp.overdue?'Просрочено':'Ожидается')}</div>
+            </div>
+            ${cp.uploaded
+              ?`<img src="/api/shifts/photos/${cp.photo_id}/file?token=${encodeURIComponent(token||'')}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;cursor:pointer" onclick="window.open('/api/shifts/photos/${cp.photo_id}/file?token=${encodeURIComponent(token||'')}','_blank')">`
+              :(mine?`<label class="btn sm primary" style="cursor:pointer">Загрузить<input type="file" accept="image/*" capture="environment" class="hidden" onchange="uploadPhoto(${s.shift_id},'${cp.slot}',this)"></label>`:'')}
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join(''):'<div class="row muted">На сегодня фото не требуются</div>';
+}
+async function uploadPhoto(shiftId,slot,input){
+  const file=input.files[0];if(!file)return;
+  const fd=new FormData();fd.append('shift_id',shiftId);fd.append('slot',slot);fd.append('file',file);
+  try{
+    const r=await fetch('/api/shifts/photos',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
+    let data=null;try{data=await r.json()}catch(e){}
+    if(!r.ok)throw new Error(data?.detail||'Ошибка загрузки');
+    toast('Фото загружено ✅');loadPhotos();
+  }catch(e){toast(e.message||'Ошибка загрузки')}
+  input.value='';
 }
 
 /* ---------- ЗАМЕТКИ ---------- */

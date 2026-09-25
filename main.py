@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager, contextmanager, AsyncExitStack
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -41,6 +41,19 @@ DB_PATH = os.getenv("DB_PATH", "orders.db")
 
 MASTER_LOGIN = "admin"
 MASTER_PASSWORD = "admin123"
+
+# Фото смены: храним рядом с базой (на том же примонтированном volume в Railway), чтобы не терять файлы при деплое.
+PHOTOS_DIR = os.getenv("PHOTOS_DIR") or os.path.join(os.path.dirname(os.path.abspath(DB_PATH)) or ".", "shift_photos")
+PHOTO_MAX_BYTES = 12 * 1024 * 1024          # 12 МБ на файл
+PHOTO_RETENTION_DAYS = 3                    # автоудаление старых фото
+PHOTO_REMINDER_MINUTES = 5                  # напомнить за 5 минут до срока
+
+# Какие фото-чекпоинты нужны для смены (по времени начала/конца). Для смен, не описанных здесь,
+# по умолчанию требуется одно фото к моменту окончания смены.
+PHOTO_SHIFT_RULES = {
+    ("08:00", "20:00"): ["12:00", "20:00"],   # дневная смена — в обед и на сдаче
+    ("20:00", "08:00"): ["08:00"],            # ночная смена — только на сдаче утром
+}
 
 ORDER_HOUR, ORDER_MINUTE = 7, 0          # заявка уходит в 07:00 по Москве
 MSK = timezone(timedelta(hours=3))
@@ -388,6 +401,14 @@ def init_db():
             p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL)""")
         c.execute("CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)")
 
+        c.execute("""CREATE TABLE IF NOT EXISTS shift_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, shift_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            day TEXT NOT NULL, slot TEXT NOT NULL, file_path TEXT NOT NULL, uploaded_at INTEGER NOT NULL,
+            UNIQUE(shift_id, slot))""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_shift_photos_day ON shift_photos(day)")
+        c.execute("""CREATE TABLE IF NOT EXISTS photo_reminders_sent (
+            shift_id INTEGER NOT NULL, slot TEXT NOT NULL, PRIMARY KEY (shift_id, slot))""")
+
         if c.execute("SELECT COUNT(*) FROM checklist_items").fetchone()[0] == 0:
             for shift, items in CHECKLIST_SEED.items():
                 for pos, (title, details) in enumerate(items):
@@ -421,6 +442,19 @@ def current_user(authorization: Optional[str] = Header(None)) -> dict:
     with db() as c:
         row = c.execute("""SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
                            WHERE s.token=? AND s.created_at>?""", (token, time.time() - SESSION_TTL)).fetchone()
+    if not row or row["status"] != "approved":
+        raise HTTPException(401, "Сессия истекла, войдите заново")
+    return dict(row)
+
+
+def current_user_flexible(authorization: Optional[str] = Header(None), token: Optional[str] = None) -> dict:
+    """Как current_user, но также принимает ?token=... — нужно для <img src>, который не может послать заголовок Authorization."""
+    tok = authorization[7:] if (authorization and authorization.startswith("Bearer ")) else token
+    if not tok:
+        raise HTTPException(401, "Требуется вход")
+    with db() as c:
+        row = c.execute("""SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
+                           WHERE s.token=? AND s.created_at>?""", (tok, time.time() - SESSION_TTL)).fetchone()
     if not row or row["status"] != "approved":
         raise HTTPException(401, "Сессия истекла, войдите заново")
     return dict(row)
@@ -499,28 +533,6 @@ def send_push(user_ids: List[int], title: str, body: str, url: str = "/"):
                     logger.warning(f"Push не доставлен: {e}")
 
 
-@app.get("/api/push/public_key")
-async def push_public_key():
-    return {"key": VAPID_PUBLIC_KEY}
-
-
-@app.post("/api/push/subscribe")
-async def push_subscribe(body: PushSubscribeIn, user: dict = Depends(current_user)):
-    with db() as c:
-        c.execute("""INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at)
-                     VALUES (?,?,?,?,?)
-                     ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id, p256dh=excluded.p256dh, auth=excluded.auth""",
-                  (user["id"], body.endpoint, body.keys.p256dh, body.keys.auth, int(time.time())))
-    return {"status": "success"}
-
-
-@app.post("/api/push/unsubscribe")
-async def push_unsubscribe(body: PushUnsubscribeIn, user: dict = Depends(current_user)):
-    with db() as c:
-        c.execute("DELETE FROM push_subscriptions WHERE endpoint=? AND user_id=?", (body.endpoint, user["id"]))
-    return {"status": "success"}
-
-
 # ======================= TELEGRAM (только 07:00) =======================
 async def send_order_to_tg():
     with db() as c:
@@ -566,6 +578,10 @@ async def lifespan(app: FastAPI):
         logger.info("MAX_BOT_TOKEN не задан: интеграция с MAX отключена")
     scheduler.add_job(send_order_to_tg, "cron", hour=ORDER_HOUR, minute=ORDER_MINUTE,
                       misfire_grace_time=3600, coalesce=True, max_instances=1)
+    scheduler.add_job(check_photo_reminders, "cron", minute="*", second=5,
+                      misfire_grace_time=50, coalesce=True, max_instances=1)
+    scheduler.add_job(cleanup_old_photos, "interval", days=PHOTO_RETENTION_DAYS,
+                      misfire_grace_time=3600, coalesce=True, max_instances=1)
     scheduler.start()
     async with AsyncExitStack() as stack:
         if max_webhook:
@@ -585,6 +601,28 @@ max_webhook = FastAPIMaxWebhook(dp=max_dp, bot=max_bot) if max_bot else None
 if max_webhook:
     max_webhook.setup(app, path=MAX_WEBHOOK_PATH)
 
+
+# ======================= PUSH: РОУТЫ (сами роуты; логика отправки — send_push выше) =======================
+@app.get("/api/push/public_key")
+async def push_public_key():
+    return {"key": VAPID_PUBLIC_KEY}
+
+
+@app.post("/api/push/subscribe")
+async def push_subscribe(body: PushSubscribeIn, user: dict = Depends(current_user)):
+    with db() as c:
+        c.execute("""INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at)
+                     VALUES (?,?,?,?,?)
+                     ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id, p256dh=excluded.p256dh, auth=excluded.auth""",
+                  (user["id"], body.endpoint, body.keys.p256dh, body.keys.auth, int(time.time())))
+    return {"status": "success"}
+
+
+@app.post("/api/push/unsubscribe")
+async def push_unsubscribe(body: PushUnsubscribeIn, user: dict = Depends(current_user)):
+    with db() as c:
+        c.execute("DELETE FROM push_subscriptions WHERE endpoint=? AND user_id=?", (body.endpoint, user["id"]))
+    return {"status": "success"}
 
 
 # ======================= АККАУНТЫ =======================
@@ -1053,6 +1091,163 @@ async def schedule_history(limit: int = 200, user: dict = Depends(current_user))
         rows = c.execute("SELECT id, ts, actor_name, action, description, undone FROM schedule_history ORDER BY id DESC LIMIT ?",
                          (min(max(limit, 1), 500),)).fetchall()
     return [{**dict(r), "undone": bool(r["undone"]), "undoable": r["action"] in UNDOABLE and not r["undone"]} for r in rows]
+
+
+# ======================= ФОТО СМЕНЫ (обязательные фото бара + напоминания + автоудаление) =======================
+def hm_to_min(t: str) -> int:
+    h, m = t.split(":")
+    return int(h) * 60 + int(m)
+
+
+def photo_checkpoints_for_shift(s: dict) -> list:
+    """Возвращает список обязательных чекпоинтов для смены: [{slot, date, due_dt}, ...].
+    Дневная смена 08:00–20:00 → 12:00 и 20:00. Ночная 20:00–08:00 → только 08:00 (сутра, уже следующая дата).
+    Для остальных вариантов смен по умолчанию — одно фото к моменту окончания смены."""
+    times = PHOTO_SHIFT_RULES.get((s["start"], s["end"])) or [s["end"]]
+    start_date = parse_day(s["date"])
+    crosses = hm_to_min(s["end"]) <= hm_to_min(s["start"])
+    out = []
+    for t in times:
+        date_obj = start_date + timedelta(days=1) if (crosses and hm_to_min(t) < hm_to_min(s["start"])) else start_date
+        h, m = map(int, t.split(":"))
+        due_dt = datetime(date_obj.year, date_obj.month, date_obj.day, h, m, tzinfo=MSK)
+        out.append({"slot": t, "date": date_obj.strftime("%Y-%m-%d"), "due_dt": due_dt})
+    return out
+
+
+def photo_dict(r) -> dict:
+    return {"id": r["id"], "shift_id": r["shift_id"], "slot": r["slot"], "uploaded_at": r["uploaded_at"]}
+
+
+@app.get("/api/shifts/photos/status")
+async def photo_status(day: Optional[str] = None, user: dict = Depends(current_user)):
+    target = day or datetime.now(MSK).strftime("%Y-%m-%d")
+    parse_day(target)
+    prev_day = (parse_day(target) - timedelta(days=1)).strftime("%Y-%m-%d")
+    now = datetime.now(MSK)
+    admin = user["role"] in ADMIN_ROLES
+    with db() as c:
+        rows = c.execute(SHIFT_SQL + " WHERE s.day IN (?,?) ORDER BY s.start_time", (target, prev_day)).fetchall()
+        result = []
+        for r in rows:
+            s = shift_dict(r)
+            if not s["user_id"] or (not admin and s["user_id"] != user["id"]):
+                continue
+            cps = [cp for cp in photo_checkpoints_for_shift(s) if cp["date"] == target]
+            if not cps:
+                continue
+            photos = {p["slot"]: p for p in c.execute("SELECT * FROM shift_photos WHERE shift_id=?", (s["id"],)).fetchall()}
+            checkpoints = []
+            for cp in cps:
+                p = photos.get(cp["slot"])
+                checkpoints.append({
+                    "slot": cp["slot"], "due_at": cp["due_dt"].strftime("%H:%M"),
+                    "uploaded": bool(p), "photo_id": p["id"] if p else None,
+                    "overdue": (not p) and now > cp["due_dt"],
+                })
+            result.append({"shift_id": s["id"], "user_id": s["user_id"], "user_name": s["user_name"],
+                            "start": s["start"], "end": s["end"], "checkpoints": checkpoints})
+    return result
+
+
+@app.post("/api/shifts/photos")
+async def upload_shift_photo(shift_id: int = Form(...), slot: str = Form(...),
+                              file: UploadFile = File(...), user: dict = Depends(current_user)):
+    with db() as c:
+        s = get_shift(c, shift_id)
+    if user["role"] not in ADMIN_ROLES and s["user_id"] != user["id"]:
+        raise HTTPException(403, "Это фото можно загрузить только для своей смены")
+    valid_slots = {cp["slot"]: cp for cp in photo_checkpoints_for_shift(s)}
+    if slot not in valid_slots:
+        raise HTTPException(400, "Для этой смены не требуется фото в это время")
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(400, "Нужно загрузить изображение")
+    data = await file.read()
+    if len(data) > PHOTO_MAX_BYTES:
+        raise HTTPException(400, "Файл слишком большой (максимум 12 МБ)")
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic"}.get(file.content_type, "jpg")
+    day = valid_slots[slot]["date"]
+    day_dir = os.path.join(PHOTOS_DIR, day)
+    os.makedirs(day_dir, exist_ok=True)
+    fname = f"{shift_id}_{slot.replace(':', '')}_{int(time.time())}.{ext}"
+    fpath = os.path.join(day_dir, fname)
+    with db() as c:
+        old = c.execute("SELECT file_path FROM shift_photos WHERE shift_id=? AND slot=?", (shift_id, slot)).fetchone()
+        with open(fpath, "wb") as f:
+            f.write(data)
+        if old:
+            try:
+                if os.path.exists(old["file_path"]):
+                    os.remove(old["file_path"])
+            except OSError:
+                pass
+        c.execute("""INSERT INTO shift_photos (shift_id, user_id, day, slot, file_path, uploaded_at) VALUES (?,?,?,?,?,?)
+                     ON CONFLICT(shift_id, slot) DO UPDATE SET file_path=excluded.file_path, uploaded_at=excluded.uploaded_at""",
+                  (shift_id, s["user_id"], day, slot, fpath, int(time.time())))
+    return {"status": "success"}
+
+
+@app.get("/api/shifts/photos/{photo_id}/file")
+async def get_shift_photo_file(photo_id: int, user: dict = Depends(current_user_flexible)):
+    with db() as c:
+        r = c.execute("SELECT * FROM shift_photos WHERE id=?", (photo_id,)).fetchone()
+    if not r or not os.path.exists(r["file_path"]):
+        raise HTTPException(404, "Фото не найдено")
+    return FileResponse(r["file_path"])
+
+
+@app.delete("/api/shifts/photos/{photo_id}")
+async def delete_shift_photo(photo_id: int, actor: dict = Depends(require_admin)):
+    with db() as c:
+        r = c.execute("SELECT * FROM shift_photos WHERE id=?", (photo_id,)).fetchone()
+        if not r:
+            raise HTTPException(404, "Фото не найдено")
+        try:
+            if os.path.exists(r["file_path"]):
+                os.remove(r["file_path"])
+        except OSError:
+            pass
+        c.execute("DELETE FROM shift_photos WHERE id=?", (photo_id,))
+    return {"status": "success"}
+
+
+async def check_photo_reminders():
+    """Каждую минуту: если до обязательного фото осталось PHOTO_REMINDER_MINUTES — шлём пуш один раз."""
+    now = datetime.now(MSK).replace(second=0, microsecond=0)
+    today = now.strftime("%Y-%m-%d")
+    yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    with db() as c:
+        rows = c.execute(SHIFT_SQL + " WHERE s.day IN (?,?)", (today, yesterday)).fetchall()
+        for r in rows:
+            s = shift_dict(r)
+            if not s["user_id"]:
+                continue
+            for cp in photo_checkpoints_for_shift(s):
+                remind_at = (cp["due_dt"] - timedelta(minutes=PHOTO_REMINDER_MINUTES)).replace(second=0, microsecond=0)
+                if remind_at != now:
+                    continue
+                if c.execute("SELECT 1 FROM photo_reminders_sent WHERE shift_id=? AND slot=?", (s["id"], cp["slot"])).fetchone():
+                    continue
+                c.execute("INSERT OR IGNORE INTO photo_reminders_sent (shift_id, slot) VALUES (?,?)", (s["id"], cp["slot"]))
+                send_push([s["user_id"]], "Фото бара",
+                          f"Через {PHOTO_REMINDER_MINUTES} мин нужно сфотографировать бар (к {cp['slot']})", "/#photos")
+
+
+async def cleanup_old_photos():
+    """Раз в PHOTO_RETENTION_DAYS дней удаляет фото старше этого срока, чтобы экономить место."""
+    cutoff = int(time.time()) - PHOTO_RETENTION_DAYS * 86400
+    with db() as c:
+        rows = c.execute("SELECT id, file_path FROM shift_photos WHERE uploaded_at < ?", (cutoff,)).fetchall()
+        for r in rows:
+            try:
+                if os.path.exists(r["file_path"]):
+                    os.remove(r["file_path"])
+            except OSError as e:
+                logger.warning(f"Не удалось удалить фото {r['file_path']}: {e}")
+        c.execute("DELETE FROM shift_photos WHERE uploaded_at < ?", (cutoff,))
+        cutoff_day = (datetime.now(MSK) - timedelta(days=PHOTO_RETENTION_DAYS + 2)).strftime("%Y-%m-%d")
+        c.execute("DELETE FROM photo_reminders_sent WHERE shift_id IN (SELECT id FROM shifts WHERE day<?)", (cutoff_day,))
+    logger.info(f"Автоудаление фото смен: удалено {len(rows)} файлов старше {PHOTO_RETENTION_DAYS} дн.")
 
 
 # ======================= ЧЕК-ЛИСТ СМЕНЫ =======================
