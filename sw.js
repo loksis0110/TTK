@@ -1,7 +1,7 @@
 /* Тугай — service worker
    1) Офлайн: приложение открывается без сети, данные берутся из последней сохранённой копии.
    2) Push-уведомления (в том числе на iPhone с iOS 16.4+, если сайт добавлен на экран «Домой»). */
-const VERSION = 'tugai-v4';
+const VERSION = 'tugai-v5';
 const SHELL = `${VERSION}-shell`;
 const API = 'tugai-api';        // без версии: данные переживают обновление приложения
 const IMG = 'tugai-img';
@@ -77,6 +77,7 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (url.pathname.startsWith('/api/archives/') && url.pathname.endsWith('/download')) return;   // ZIP не кэшируем
+  if (url.pathname.startsWith('/api/logs')) return;                // журнал — только свежие данные, выгрузки не кэшируем
   if (/^\/api\/.*\/file$/.test(url.pathname)) { e.respondWith(cacheFirst(req, IMG)); return; }  // фото не меняются
   if (url.pathname.startsWith('/api/')) {
     e.respondWith(networkFirst(req, API, NET_TIMEOUT).catch(() =>

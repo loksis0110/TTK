@@ -375,7 +375,7 @@ label.lb{display:block;font-size:13px;font-weight:500;color:var(--sec);margin:16
 .shift small{color:var(--sec);font-size:12px;display:block}
 .shift.me{background:var(--accent-soft)}
 .shift.pick{box-shadow:inset 0 0 0 2px var(--accent)}
-.r-bartender{--rc:#0071e3}.r-senior_bartender{--rc:#af52de}.r-waiter{--rc:#ff9f0a}.r-bar_manager{--rc:#30d158}.r-master{--rc:#8e8e93}
+.r-bartender{--rc:#0071e3}.r-senior_bartender{--rc:#af52de}.r-bar_manager{--rc:#30d158}.r-master{--rc:#8e8e93}
 .hours{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
 .hours .row::before{display:none}
 .hist{padding:15px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative}
@@ -576,6 +576,89 @@ body{background:transparent}
 .ann-pin{color:var(--orange);display:inline-flex;align-items:center;margin-right:2px}
 @media(max-width:760px){.ann{padding:18px;border-radius:22px}.ann-title{font-size:21px}}
 
+
+/* ---------- ЖУРНАЛ (мастер) ---------- */
+.lg-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 18px}
+.lg-stat{background:var(--surface);border-radius:var(--r);padding:18px 20px;box-shadow:var(--shadow-sm);min-width:0}
+.lg-stat b{display:block;font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+.lg-stat span{display:block;font-size:14px;color:var(--sec);margin-top:4px}
+.lg-stat.warn b{color:var(--red)}
+@media(max-width:760px){.lg-stats{grid-template-columns:repeat(2,1fr);gap:10px}.lg-stat{padding:14px 16px}.lg-stat b{font-size:24px}}
+.lg-export{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.lg-export .meta{flex:1;min-width:220px}
+.lg-export .meta b{display:block;font-size:17px;font-weight:600}
+.lg-export .meta span{display:block;color:var(--sec);font-size:14px;margin-top:3px}
+.lg-export .btns{display:flex;gap:8px;flex-wrap:wrap}
+.lg-filters{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.lg-filters .field{font-size:16px;padding:11px 14px}
+.lg-filters select.field{padding-right:36px}
+@media(max-width:760px){.lg-filters{grid-template-columns:1fr}}
+.lg-dates{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.lg-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.lg-tools .seg button{padding:6px 12px}
+.lg-count{font-size:14px;color:var(--sec);margin:18px 2px 8px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.lg-list{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-sm);overflow:hidden}
+.lg-day{background:var(--fill-2);
+  font-size:13px;font-weight:600;color:var(--sec);padding:10px 20px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.04em}
+.lg-row{display:grid;grid-template-columns:52px 32px 1fr auto;gap:12px;align-items:center;padding:12px 20px;cursor:pointer;position:relative;border:0;background:none;width:100%;text-align:left;color:var(--text);font:inherit}
+.lg-row+.lg-row::before{content:'';position:absolute;top:0;left:116px;right:0;height:1px;background:var(--line)}
+@media (hover:hover){.lg-row:hover{background:var(--fill-2)}}
+.lg-time{font-size:14px;color:var(--sec);font-variant-numeric:tabular-nums}
+.lg-main{min-width:0}
+.lg-main .t{font-size:15px;line-height:1.35;overflow:hidden;text-overflow:ellipsis}
+.lg-main .t b{font-weight:600}
+.lg-mob{display:none}
+.lg-main .n{font-size:13.5px;color:var(--sec);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lg-cat{font-size:12px;font-weight:500;border-radius:980px;padding:3px 10px;white-space:nowrap;background:color-mix(in srgb,var(--cc,#8e8e93) 14%,transparent);color:var(--cc,#8e8e93)}
+.lg-fail{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--red);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:1px}
+.lg-sys{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--fill);color:var(--sec)}
+.lg-sys.unk{background:var(--red-soft);color:var(--red)}
+@media(max-width:760px){
+  .lg-row{grid-template-columns:32px 1fr;gap:10px;padding:12px 16px}
+  .lg-row+.lg-row::before{left:58px}
+  .lg-time,.lg-row>.lg-cat,.lg-main .n:not(.lg-mob){display:none}
+  .lg-main .n.lg-mob{display:-webkit-box;white-space:normal;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .lg-day{padding:9px 16px}
+}
+.lg-more{display:flex;justify-content:center;padding:18px}
+.kv{background:var(--fill-2);border-radius:16px;margin-top:16px;overflow:hidden}
+.kv div{display:grid;grid-template-columns:130px 1fr;gap:12px;padding:11px 16px;font-size:15px;position:relative}
+.kv div+div::before{content:'';position:absolute;top:0;left:16px;right:0;height:1px;background:var(--line)}
+.kv dt{color:var(--sec)}
+.kv dd{margin:0;word-break:break-word;white-space:pre-wrap}
+@media(max-width:520px){.kv div{grid-template-columns:1fr;gap:2px}}
+.lg-head{display:flex;gap:14px;align-items:center;margin-top:4px}
+.lg-head .big{font-size:22px;font-weight:700;letter-spacing:-.015em;line-height:1.2}
+.lg-exports{margin-top:14px}
+.lg-exports .row{padding:12px 16px}
+
+/* ---------- ОБЪЯВЛЕНИЯ: адресные и запланированные ---------- */
+.ann-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.ann-tag{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:500;border-radius:980px;padding:4px 10px;background:var(--fill-2);color:var(--sec)}
+.ann-tag.rem{background:var(--orange-soft);color:var(--orange)}
+.ann-tag.me{background:color-mix(in srgb,var(--tab-accent) 16%,transparent);color:var(--tab-accent)}
+.ann.personal{background:linear-gradient(135deg,color-mix(in srgb,var(--tab-accent) 7%,var(--surface)),var(--surface) 60%)}
+.sched{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-sm);margin:0 0 22px;max-width:760px;overflow:hidden}
+.sched-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 20px 6px;font-size:13px;font-weight:600;color:var(--sec);text-transform:uppercase;letter-spacing:.04em}
+.sched-row{display:flex;gap:14px;align-items:center;padding:12px 20px;position:relative}
+.sched-row+.sched-row::before{content:'';position:absolute;top:0;left:66px;right:0;height:1px;background:var(--line)}
+.sched-row .ib{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;flex:none;background:#5e5ce6}
+.sched-row .ib.rem{background:#ff9f0a}
+.sched-row .meta{flex:1;min-width:0}
+.sched-row .meta b{display:block;font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sched-row .meta span{display:block;font-size:13.5px;color:var(--sec);margin-top:2px}
+.sched-row .acts{display:flex;gap:6px}
+.pick{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;max-height:190px;overflow:auto;padding:2px}
+.pick .pill{padding:7px 14px;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.pick .pill.on{background:var(--accent);color:#fff;box-shadow:none}
+.quick{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.quick .pill{padding:6px 14px;font-size:14px}
+.when-hint{font-size:14px;color:var(--sec);margin-top:10px}
+.pw-note{background:var(--orange-soft);color:var(--orange);border-radius:14px;padding:12px 14px;font-size:14.5px;line-height:1.4;margin-top:6px}
+.temp-pw{font:600 26px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em;text-align:center;background:var(--fill-2);border-radius:16px;padding:18px;margin-top:16px;user-select:all}
+@media(max-width:760px){.lg-export>.ib{display:none}.lg-export .btns{width:100%}.lg-export .btns .btn.primary{flex:1}}
+@media(max-width:760px){.lg-tools .pills{flex:1 1 100%}.lg-tools .seg{flex:1}.lg-tools .seg button{flex:1}}
+
 /* ---------- ГРАФИК: ТАБЛИЦА ---------- */
 .roster-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-sm);margin-bottom:10px;overscroll-behavior-x:contain}
 .roster{border-collapse:separate;border-spacing:0;width:100%;min-width:760px;font-size:14px}
@@ -713,6 +796,7 @@ body{background:transparent}
       <button class="tab" data-t="schedule">График</button>
       <button class="tab" data-t="notes">Заметки</button>
       <button class="tab hidden" data-t="team" id="tab-team">Команда<span class="badge hidden" id="pending-badge"></span></button>
+      <button class="tab hidden" data-t="logs" id="tab-logs">Журнал</button>
     </nav>
     <div class="nav-actions">
       <span class="net-status hidden" id="net-status" onclick="flushOutbox()" role="status"></span>
@@ -789,7 +873,7 @@ body{background:transparent}
         <input class="field" id="o-comment" placeholder="Комментарий (необязательно)" style="margin-top:12px" onkeydown="if(event.key==='Enter')submitOrder()">
         <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
           <button class="btn primary" style="flex:1;min-height:48px;border-radius:14px;font-size:16px" onclick="submitOrder()" data-ic="plus">Добавить в список</button>
-          <button class="btn not-waiter-only" style="min-height:48px;border-radius:14px;font-size:16px" onclick="sendOrderNow()" data-ic="send">Отправить сейчас</button>
+          <button class="btn" style="min-height:48px;border-radius:14px;font-size:16px" onclick="sendOrderNow()" data-ic="send">Отправить сейчас</button>
         </div>
       </div>
       <div class="group" id="orders"></div>
@@ -797,10 +881,10 @@ body{background:transparent}
 
     <!-- ОБЪЯВЛЕНИЯ -->
     <section class="view" id="view-news">
-      <div class="hero"><span class="eyebrow">Команда</span><h1>Объявления</h1><p>Важное от руководства. Нажмите «Ознакомлен», чтобы все знали, что вы в курсе.</p></div>
+      <div class="hero"><span class="eyebrow">Команда</span><h1>Объявления</h1><p>Важное от руководства и личные напоминания. Нажмите «Ознакомлен», чтобы все знали, что вы в курсе.</p></div>
       <button class="compose-cta edit-only" onclick="openAnnEditor(null)">
         <span class="cta-ic" data-ic="megaphone"></span>
-        <div><b>Новое объявление</b><span>Все сотрудники получат уведомление</span></div>
+        <div><b>Объявление или напоминание</b><span>Всем или лично, сразу или в нужное время</span></div>
         <span class="chev-r" data-ic="chevR"></span>
       </button>
       <div id="news-list"></div>
@@ -842,7 +926,7 @@ body{background:transparent}
     <section class="view" id="view-shame">
       <div class="hero"><span class="eyebrow">Смена</span><h1>Стена позора</h1><p>Фото и подпись — что именно сделано не так. Отмеченному сотруднику придёт уведомление.</p></div>
       <div class="archive-note" id="shame-archive-note"></div>
-      <button class="compose-cta not-waiter-only" onclick="newShame()">
+      <button class="compose-cta" onclick="newShame()">
         <span class="cta-ic" data-ic="camera"></span>
         <div><b>Новая запись</b><span>Несколько фото, подпись и отметка сотрудника</span></div>
         <span class="chev-r" data-ic="chevR"></span>
@@ -859,6 +943,17 @@ body{background:transparent}
         <button class="btn primary" onclick="newNote()" data-ic="plus">Заметка</button>
       </div>
       <div id="notes-list"></div>
+    </section>
+
+    <!-- ЖУРНАЛ (мастер) -->
+    <section class="view" id="view-logs">
+      <div class="hero"><span class="eyebrow">Мастер-аккаунт</span><h1>Журнал</h1><p>Каждое действие в приложении: кто, что и когда сделал. Хранится внутри приложения 400 дней и каждые 3 дня выгружается в архив.</p></div>
+      <div class="lg-stats" id="lg-stats"></div>
+      <div id="lg-export"></div>
+      <div class="section-head"><h2>События</h2></div>
+      <div id="lg-filters"></div>
+      <div class="lg-count" id="lg-count"></div>
+      <div id="lg-list"></div>
     </section>
 
     <!-- КОМАНДА -->
@@ -913,8 +1008,8 @@ body{background:transparent}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-const ROLES={bartender:'Бармен',waiter:'Официант',bar_manager:'Бар-менеджер',senior_bartender:'Старший бармен',master:'Мастер'};
-const ASSIGNABLE=['bartender','senior_bartender','waiter','bar_manager'];
+const ROLES={bartender:'Бармен',bar_manager:'Бар-менеджер',senior_bartender:'Старший бармен',master:'Мастер'};
+const ASSIGNABLE=['bartender','senior_bartender','bar_manager'];
 const PRESETS=[['День','08:00','20:00'],['Полдень','12:00','00:00'],['Ночь','20:00','08:00']];
 const MONTHS=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const MONTHS_NOM=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -928,7 +1023,6 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isAdmin=()=>me&&['master','bar_manager'].includes(me.role);
 const canEdit=()=>me&&['master','bar_manager','senior_bartender'].includes(me.role);
-const notWaiter=()=>me&&me.role!=='waiter';
 const pad=n=>String(n).padStart(2,'0');
 const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
@@ -1177,12 +1271,12 @@ async function submitAuth(){
       $('a-pass').value='';
     }else{
       const r=await api('/api/login',{method:'POST',body:{username,password}});
-      token=r.token;localStorage.setItem('tugai_token',token);me=r.user;localStorage.setItem('tugai_me',JSON.stringify(me));$('a-pass').value='';enter();
+      token=r.token;localStorage.setItem('tugai_token',token);localStorage.setItem('tugai_ck',token.slice(0,10)+iso(new Date()));me=r.user;localStorage.setItem('tugai_me',JSON.stringify(me));$('a-pass').value='';enter();
     }
   }catch(e){$('a-err').textContent=e.message}
 }
 function localLogout(){
-  token=null;me=null;['tugai_token','tugai_me',OUTBOX_KEY,'tugai_shifts','tugai_draft'].forEach(k=>localStorage.removeItem(k));
+  token=null;me=null;['tugai_token','tugai_me',OUTBOX_KEY,'tugai_shifts','tugai_draft','tugai_ck'].forEach(k=>localStorage.removeItem(k));
   clearInterval(ordersTimer);closeSheet();closeLightbox();
   if(navigator.serviceWorker&&navigator.serviceWorker.controller)navigator.serviceWorker.controller.postMessage({type:'clear-data'});
   try{caches.delete('tugai-api')}catch(e){}
@@ -1207,14 +1301,18 @@ async function enter(){
   $('auth').classList.add('hidden');$('app').classList.remove('hidden');
   $('user-chip').innerHTML=avatar(me.name);$('user-chip').title=`${me.name} · ${ROLES[me.role]||''}`;
   $('tab-team').classList.toggle('hidden',!canEdit());
+  $('tab-logs').classList.toggle('hidden',!isMaster());
+  await ensureCookie();
+  if(me.must_change_password){            // заводской пароль мастера: сервер ничего не отдаст, пока его не сменят
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));openPassword(true);return;
+  }
   document.querySelectorAll('.edit-only').forEach(e=>e.classList.toggle('hidden',!canEdit()));
   document.querySelectorAll('.admin-only').forEach(e=>e.classList.toggle('hidden',!isAdmin()));
-  document.querySelectorAll('.not-waiter-only').forEach(e=>e.classList.toggle('hidden',!notWaiter()));
   const [m,st]=await Promise.all([run(()=>api('/api/menu')),api('/api/stoplist').catch(()=>null)]);
   if(m)menu=m;if(st)stopList=st;
   if(isAdmin())refreshPending();
   const h=location.hash.slice(1);
-  go(TABS.includes(h)&&(h!=='team'||canEdit())?h:'drinks');
+  go(tabAllowed(h)?h:'drinks');
   clearInterval(ordersTimer);
   ordersTimer=setInterval(()=>{if(document.hidden||!navigator.onLine)return;if(tab==='orders')fetchOrders();pollTick++;if(pollTick%12===0){refreshUnread();if(tab==='drinks'||tab==='pf')loadStop()}},5000);
   refreshUnread();initPush();flushOutbox();setTimeout(warmCache,1500);
@@ -1322,7 +1420,7 @@ document.getElementById('cl-detail-seg').addEventListener('click',e=>{
   renderChecklist();
 });
 
-const TABS=['drinks','pf','news','checklist','photos','shame','orders','schedule','notes','team'];
+const TABS=['drinks','pf','news','checklist','photos','shame','orders','schedule','notes','team','logs'];
 function go(t){
   tab=t;
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
@@ -1344,14 +1442,16 @@ function go(t){
   if(t==='notes')loadNotes();
   if(t==='news')loadNews();
   if(t==='team')loadTeam();
+  if(t==='logs')loadLogs();
   window.scrollTo({top:0});
 }
-window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(me&&TABS.includes(h)&&h!==tab&&(h!=='team'||canEdit()))go(h)});
+const tabAllowed=h=>TABS.includes(h)&&(h!=='team'||canEdit())&&(h!=='logs'||isMaster());
+window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(me&&h!==tab&&tabAllowed(h))go(h)});
 
 /* ---------- ЖИВОЙ ФОН: мягкое свечение, цвет плавно меняется от вкладки к вкладке ---------- */
 const TAB_GLOW={drinks:['#0a84ff','#64d2ff','#0066cc','#2997ff'],pf:['#30b0c7','#34c759','#0b7285','#40c8e0'],news:['#5e5ce6','#0a84ff','#4b49c8','#7d7aff'],
   checklist:['#30d158','#64d2ff','#1d8a3a','#30d158'],photos:['#5856d6','#0a84ff','#4b49c8','#7d7aff'],shame:['#ff375f','#ff9f0a','#d70015','#ff6482'],
-  orders:['#ff9f0a','#ffd60a','#b64400','#ff9f0a'],schedule:['#bf5af2','#5e5ce6','#8944ab','#da8fff'],notes:['#ffd60a','#ff9f0a','#a05a00','#ffd60a'],team:['#64d2ff','#8e8e93','#0071a4','#64d2ff']};
+  orders:['#ff9f0a','#ffd60a','#b64400','#ff9f0a'],schedule:['#bf5af2','#5e5ce6','#8944ab','#da8fff'],notes:['#ffd60a','#ff9f0a','#a05a00','#ffd60a'],team:['#64d2ff','#8e8e93','#0071a4','#64d2ff'],logs:['#5e5ce6','#30b0c7','#3634a3','#7d7aff']};
 const isDark=()=>{const t=document.documentElement.getAttribute('data-theme');return t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches};
 function hexA(h,a){const n=parseInt(h.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`}
 let glowKey='';
@@ -1393,9 +1493,9 @@ function renderCards(){
     const calc=i.calcIngredients&&i.calcIngredients.length;
     const body=calc?`<div class="calc" onclick="event.stopPropagation()"><b>Получить</b><input type="number" id="ci-${i.id}" value="${i.baseYield}" oninput="recalc(${i.id},${i.baseYield})"><span class="muted">${esc(i.unit)}</span></div>
       <div class="method">${esc(i.method)}</div>
-      <ul>${i.calcIngredients.map(g=>`<li>${esc(g.name)} — <span class="ing-val ia-${i.id}" data-b="${g.amount}">${g.amount}</span> ${esc(g.unit)}</li>`).join('')}</ul>`
+      <ul>${i.calcIngredients.map(g=>`<li>${esc(g.name)} — <span class="ing-val ia-${i.id}" data-b="${esc(g.amount)}">${esc(g.amount)}</span> ${esc(g.unit)}</li>`).join('')}</ul>`
       :`<div class="method">${esc(i.method)}</div><ul>${(i.ingredients||[]).map(g=>`<li>${esc(g)}</li>`).join('')}</ul>`;
-    const stopBtn=notWaiter()?`<div class="card-foot" onclick="event.stopPropagation()">${st
+    const stopBtn=me?`<div class="card-foot" onclick="event.stopPropagation()">${st
       ?`<button class="btn sm" onclick="removeStop(${JSON.stringify(st.id).replace(/"/g,'&quot;')})">${ic('check',15)}Снова в наличии</button>`
       :`<button class="btn sm danger" onclick="stopMenuItem(${i.id})">${ic('stop',15)}В стоп-лист</button>`}</div>`:'';
     return `<div class="card ${st?'stopped':''}" onclick="toggleCard(this)"><div class="card-head"><h3 class="card-title">${esc(i.title)}${st?` <span class="stop-badge">Стоп</span>`:''}</h3><span class="chev">${ic('chevD',18)}</span></div>
@@ -1415,12 +1515,12 @@ function renderStopBanner(){
   const n=stopList.length;
   if(!n){
     el.className='stop-banner ok';
-    el.innerHTML=`<span class="sb-ic ok">${ic('check',18)}</span><div class="sb-t"><b>Стоп-лист пуст</b><span>Всё в наличии</span></div>${notWaiter()?`<button class="btn sm" onclick="openStopAdd()">${ic('plus',15)}Добавить</button>`:''}`;
+    el.innerHTML=`<span class="sb-ic ok">${ic('check',18)}</span><div class="sb-t"><b>Стоп-лист пуст</b><span>Всё в наличии</span></div>${me?`<button class="btn sm" onclick="openStopAdd()">${ic('plus',15)}Добавить</button>`:''}`;
     return;
   }
   el.className='stop-banner';
   el.innerHTML=`<div class="sb-head"><span class="sb-ic">${ic('stop',22)}</span><div class="sb-t"><b>Стоп-лист · ${n}</b><span>Эти позиции сейчас нельзя продавать</span></div>
-      ${notWaiter()?`<button class="btn sm sb-add" onclick="openStopAdd()">${ic('plus',15)}Добавить</button>`:''}</div>
+      ${me?`<button class="btn sm sb-add" onclick="openStopAdd()">${ic('plus',15)}Добавить</button>`:''}</div>
     <div class="sb-chips">${stopList.map((s,i)=>`<button class="sb-chip ${s._pending?'pending':''}" onclick="openStopItem(${i})">${esc(s.name)}${s.note?`<small>${esc(s.note)}</small>`:''}${s._pending?`<small>ждёт отправки</small>`:''}</button>`).join('')}</div>`;
 }
 function openStopItem(i){
@@ -1429,7 +1529,7 @@ function openStopItem(i){
     <span class="stop-badge" style="margin-bottom:10px;display:inline-block">Стоп</span><h2>${esc(s.name)}</h2>
     ${s.note?`<p style="font-size:17px;margin:8px 0 0">${esc(s.note)}</p>`:''}
     <p class="sub">${s.user_name?`${esc(s.user_name)} · `:''}${esc(fmtShameDate(s.created_at))}</p>
-    <div class="actions">${notWaiter()?`<button class="btn primary" onclick="removeStop(${JSON.stringify(s.id).replace(/"/g,'&quot;')});closeSheet()">${ic('check',17)}Снова в наличии</button>`:''}
+    <div class="actions">${me?`<button class="btn primary" onclick="removeStop(${JSON.stringify(s.id).replace(/"/g,'&quot;')});closeSheet()">${ic('check',17)}Снова в наличии</button>`:''}
       <button class="btn" onclick="stopToOrder(${i})">${ic('plus',17)}В заявку на закупку</button></div>`;
   $('ov').classList.add('on');
 }
@@ -1455,7 +1555,7 @@ function stopReason(el){const on=!el.classList.contains('on');document.querySele
 function stopSuggest(){
   const q=$('st-q').value.trim().toLowerCase();
   const found=menu.filter(i=>!stopFor(i.id)&&(!q||i.title.toLowerCase().includes(q))).slice(0,q?8:6);
-  $('st-list').innerHTML=found.map(i=>`<button class="st-item ${stopPick===i.id?'on':''}" onclick="stopPick=${i.id};$('st-q').value=${JSON.stringify(i.title).replace(/"/g,'&quot;')};stopSuggest()"><span>${esc(i.title)}</span><small>${i.tab==='pf'?'ПФ':'Напиток'}</small></button>`).join('')
+  $('st-list').innerHTML=found.map(i=>`<button class="st-item ${stopPick===i.id?'on':''}" onclick="stopPick=${i.id};$('st-q').value=(menu.find(m=>m.id===${i.id})||{}).title||'';stopSuggest()"><span>${esc(i.title)}</span><small>${i.tab==='pf'?'ПФ':'Напиток'}</small></button>`).join('')
     +(q&&!menu.some(i=>i.title.toLowerCase()===q)?`<button class="st-item ${stopPick===null?'on':''}" onclick="stopPick=null;stopSuggest()"><span>«${esc($('st-q').value.trim())}»</span><small>своя позиция</small></button>`:'');
   if(stopPick&&!menu.some(i=>i.id===stopPick&&i.title.toLowerCase()===q))stopPick=null;
   $('st-save').disabled=!q;
@@ -1554,7 +1654,7 @@ function shiftWeek(n){weekStart=addDays(weekStart,7*n);loadWeek()}
 function rosterPeople(){
   const ids=new Set(staffList.filter(u=>u.role!=='master').map(u=>u.id));
   shifts.forEach(s=>ids.add(s.user_id));
-  const order={senior_bartender:0,bar_manager:1,bartender:2,waiter:3};
+  const order={senior_bartender:0,bar_manager:1,bartender:2};
   const people=[...ids].map(id=>{const u=staffList.find(x=>x.id===id);return {id,name:u?u.name:(shifts.find(s=>s.user_id===id)||{}).user_name||'Удалённый',role:u?u.role:''}});
   return people.sort((a,b)=>(a.id===me.id?-1:b.id===me.id?1:0)||((order[a.role]??5)-(order[b.role]??5))||a.name.localeCompare(b.name,'ru'));
 }
@@ -1565,7 +1665,7 @@ function cellShifts(uid,date){
 }
 function renderRoster(){
   const days=Array.from({length:7},(_,i)=>addDays(weekStart,i)),todayK=iso(new Date()),people=rosterPeople(),edit=canEdit();
-  const groups=[['Бар',people.filter(p=>p.role!=='waiter')],['Зал',people.filter(p=>p.role==='waiter')]].filter(g=>g[1].length);
+  const groups=[['Команда бара',people]].filter(g=>g[1].length);
   const head=`<thead><tr><th class="rs-name">Сотрудник</th>${days.map((d,i)=>`<th class="${iso(d)===todayK?'today':''}"><span>${DAYS[i]}</span><b>${d.getDate()}</b></th>`).join('')}<th class="rs-h">Часы</th></tr></thead>`;
   const rows=groups.map(([title,list])=>`<tr class="rs-group"><td colspan="9"><span>${title}</span></td></tr>`+list.map(p=>{
     let hours=0;
@@ -1815,10 +1915,13 @@ async function sendOrderNow(){
   if(r&&!r.queued){toast('Заявка отправлена в группу');fetchOrders()}
 }
 
-/* ---------- ОБЪЯВЛЕНИЯ ---------- */
-let annList=[];
+/* ---------- ОБЪЯВЛЕНИЯ И НАПОМИНАНИЯ ---------- */
+let annList=[],schedList=[];
+const REPEAT_LABELS={'':'Без повтора',daily:'Каждый день',weekdays:'По будням',weekly:'Каждую неделю'};
 async function loadNews(){
-  const r=await run(()=>api('/api/announcements'));if(!r)return;
+  const [r,s]=await Promise.all([run(()=>api('/api/announcements')),canEdit()?api('/api/scheduled').catch(()=>null):null]);
+  if(s)schedList=s;
+  if(!r)return;
   annList=r;renderNews();updateNewsBadge(r.filter(a=>!a.read).length);
 }
 async function refreshUnread(){
@@ -1829,24 +1932,46 @@ function updateNewsBadge(n){
   const b=$('news-badge');if(b){b.textContent=n;b.classList.toggle('hidden',!n)}
   try{if(n&&navigator.setAppBadge)navigator.setAppBadge(n);else if(navigator.clearAppBadge)navigator.clearAppBadge()}catch(e){}
 }
-function linkify(t){return esc(t).replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>')}
+function linkify(t){return esc(t).replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')}
+function audNames(list){const n=list.map(x=>x.name);return n.length>3?n.slice(0,3).join(', ')+` и ещё ${n.length-3}`:n.join(', ')}
+function fmtWhen(ts){
+  const d=new Date(ts*1000),now=new Date(),tm=d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  if(d.toDateString()===now.toDateString())return `сегодня в ${tm}`;
+  if(d.toDateString()===addDays(now,1).toDateString())return `завтра в ${tm}`;
+  return d.toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'long'})+` в ${tm}`;
+}
+function renderSched(){
+  if(!canEdit()||!schedList.length)return '';
+  return `<div class="sched"><div class="sched-h"><span>Запланировано · ${schedList.length}</span></div>
+    ${schedList.map(s=>`<div class="sched-row"><span class="ib ${s.kind==='reminder'?'rem':''}">${ic(s.kind==='reminder'?'bell':'megaphone',17)}</span>
+      <div class="meta"><b>${esc(s.title||s.body.slice(0,60))}</b><span>${esc(fmtWhen(s.send_at))}${s.repeat?' · '+esc(s.repeat_label.toLowerCase()):''} · ${s.audience.length?'для: '+esc(audNames(s.audience)):'всем'}${s.user_id!==me.id?' · от '+esc(s.user_name):''}</span></div>
+      ${s.can_edit?`<div class="acts"><button class="btn icon sm" onclick="openAnnEditor(null,${s.id})" aria-label="Изменить">${ic('pencil',17)}</button><button class="btn icon sm danger" onclick="cancelSched(${s.id})" aria-label="Отменить">${ic('trash',17)}</button></div>`:''}</div>`).join('')}</div>`;
+}
 function renderNews(){
   const el=$('news-list');
-  el.innerHTML=annList.length?annList.map(a=>`
-    <article class="ann ${a.read?'':'unread'} ${a.pinned?'pinned':''}">
+  const tags=a=>{
+    const t=[];
+    if(a.kind==='reminder')t.push(`<span class="ann-tag rem">${ic('bell',14)}Напоминание</span>`);
+    if(a.to_me)t.push(`<span class="ann-tag me">${ic('user',14)}Лично вам</span>`);
+    else if(a.personal)t.push(`<span class="ann-tag">${ic('user',14)}Для: ${esc(audNames(a.audience))}</span>`);
+    return t.length?`<div class="ann-tags">${t.join('')}</div>`:'';
+  };
+  el.innerHTML=renderSched()+(annList.length?annList.map(a=>`
+    <article class="ann ${a.read?'':'unread'} ${a.pinned?'pinned':''} ${a.to_me?'personal':''}">
       <div class="post-head">${avatar(a.user_name)}
         <div><div class="post-who">${esc(a.user_name)}</div><div class="post-meta">${esc(fmtShameDate(a.created_at))}${a.edited_at?' · изменено':''}</div></div>
         <div class="post-actions">${a.pinned?`<span class="ann-pin" title="Закреплено">${ic('pin',16)}</span>`:''}
           ${a.can_edit?`<button class="btn icon sm" onclick="openAnnEditor(${a.id})" aria-label="Изменить">${ic('pencil',17)}</button><button class="btn icon sm danger" onclick="deleteAnn(${a.id})" aria-label="Удалить">${ic('trash',17)}</button>`:''}</div>
       </div>
+      ${tags(a)}
       ${a.title?`<h3 class="ann-title">${esc(a.title)}</h3>`:''}
       ${a.body?`<div class="ann-body">${linkify(a.body)}</div>`:''}
       <div class="ann-foot">
-        ${a.user_id===me.id?'<span class="muted" style="font-size:14px">Ваше объявление</span>':a.read?`<span class="ann-ok">${ic('check',16)}Вы ознакомились${a.read_at?' · '+esc(fmtShameDate(a.read_at)):''}</span>`:`<button class="btn primary sm" onclick="readAnn(${a.id})">${ic('check',16)}Ознакомлен</button>`}
-        ${a.readers?`<button class="btn ghost sm" style="margin-left:auto" onclick="openReaders(${a.id})">Прочитали ${a.readers.length} из ${a.readers.length+a.not_read.length}</button>`:''}
+        ${a.user_id===me.id&&!a.to_me?'<span class="muted" style="font-size:14px">Ваше '+(a.kind==='reminder'?'напоминание':'объявление')+'</span>':a.read?`<span class="ann-ok">${ic('check',16)}Вы ознакомились${a.read_at?' · '+esc(fmtShameDate(a.read_at)):''}</span>`:`<button class="btn primary sm" onclick="readAnn(${a.id})">${ic('check',16)}Ознакомлен</button>`}
+        ${a.readers&&(a.readers.length+a.not_read.length)?`<button class="btn ghost sm" style="margin-left:auto" onclick="openReaders(${a.id})">Прочитали ${a.readers.length} из ${a.readers.length+a.not_read.length}</button>`:''}
       </div>
     </article>`).join('')
-    :`<div class="empty-card">${ic('megaphone',34)}<b>Объявлений пока нет</b>${canEdit()?'Нажмите «Новое объявление», чтобы написать команде.':'Здесь появятся новости от руководства.'}</div>`;
+    :`<div class="empty-card">${ic('megaphone',34)}<b>Объявлений пока нет</b>${canEdit()?'Нажмите «Объявление или напоминание», чтобы написать команде или конкретному человеку.':'Здесь появятся новости и напоминания от руководства.'}</div>`);
 }
 async function readAnn(id){
   const a=annList.find(x=>x.id===id);if(!a)return;
@@ -1863,30 +1988,318 @@ function openReaders(id){
     ${a.readers.length?`<label class="lb">Ознакомились · ${a.readers.length}</label><div class="acc-group" style="margin-top:0">${a.readers.map(r=>`<div class="acc-row"><span class="lbl">${avatar(r.name,'sm')}${esc(r.name)}</span><span class="muted" style="font-size:14px">${esc(fmtShameDate(r.read_at))}</span></div>`).join('')}</div>`:''}`;
   $('ov').classList.add('on');
 }
-function openAnnEditor(id){
-  const a=id?annList.find(x=>x.id===id):null;
+/* Редактор: тип (объявление / напоминание), кому (всем / выбрать людей), когда (сейчас / по расписанию + повтор). */
+let annEd=null;
+function roundedNext(){const d=new Date();d.setMinutes(d.getMinutes()+60);d.setMinutes(d.getMinutes()<30?30:60,0,0);return d}
+async function openAnnEditor(id,schedId){
+  const a=id?annList.find(x=>x.id===id):null,s=schedId?schedList.find(x=>x.id===schedId):null;
+  await ensureStaff();
+  const src=a||s;const at=s?new Date(s.send_at*1000):roundedNext();
+  annEd={id:a?a.id:null,schedId:s?s.id:null,kind:src?src.kind||'news':'news',who:src&&src.audience&&src.audience.length?'some':'all',
+    picked:new Set(src&&src.audience?src.audience.map(x=>x.id):[]),when:s?'later':'now',date:iso(at),time:`${pad(at.getHours())}:${pad(at.getMinutes())}`,repeat:s?s.repeat||'':''};
+  const people=staffList.filter(u=>u.role!=='master'||u.id===me.id);
+  const title=a?(a.kind==='reminder'?'Изменить напоминание':'Изменить объявление'):s?'Изменить запланированное':'Новое объявление или напоминание';
   $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
-    <h2>${a?'Изменить объявление':'Новое объявление'}</h2>${a?'':'<p class="sub">Все сотрудники получат уведомление.</p>'}
-    <label class="lb" for="an-t">Заголовок</label><input class="field" id="an-t" maxlength="120" placeholder="Например, Инвентаризация в понедельник" value="${a?esc(a.title):''}">
-    <label class="lb" for="an-b">Текст</label><textarea class="field" id="an-b" rows="6" maxlength="4000" placeholder="Подробности">${a?esc(a.body):''}</textarea>
+    <h2>${title}</h2>
+    <label class="lb">Тип</label>
+    <div class="seg full" id="an-kind">${[['news','Объявление'],['reminder','Напоминание']].map(([v,l])=>`<button data-v="${v}" class="${annEd.kind===v?'on':''}" onclick="annSet('kind','${v}')">${l}</button>`).join('')}</div>
+    <label class="lb" for="an-t">Заголовок</label><input class="field" id="an-t" maxlength="120" placeholder="${annEd.kind==='reminder'?'Например, Сдать инвентаризацию':'Например, Инвентаризация в понедельник'}" value="${src?esc(src.title):''}">
+    <label class="lb" for="an-b">Текст</label><textarea class="field" id="an-b" rows="5" maxlength="4000" placeholder="Подробности">${src?esc(src.body):''}</textarea>
+    ${a?(a.personal?`<label class="lb">Кому</label><div class="ann-tags" style="margin-top:0"><span class="ann-tag">${ic('user',14)}${esc(audNames(a.audience))}</span></div>`:''):`
+    <label class="lb">Кому</label>
+    <div class="seg full" id="an-who">${[['all','Всем сотрудникам'],['some','Выбрать людей']].map(([v,l])=>`<button data-v="${v}" class="${annEd.who===v?'on':''}" onclick="annSet('who','${v}')">${l}</button>`).join('')}</div>
+    <div id="an-pick-box" class="${annEd.who==='some'?'':'hidden'}"><div class="pick" id="an-pick">${people.map(u=>`<button type="button" class="pill ${annEd.picked.has(u.id)?'on':''}" data-id="${u.id}" onclick="annPick(${u.id},this)">${esc(u.name)}${u.id===me.id?' (себе)':''}</button>`).join('')}</div></div>
+    <label class="lb">Когда</label>
+    <div class="seg full" id="an-when">${[['now','Отправить сейчас'],['later','Запланировать']].map(([v,l])=>`<button data-v="${v}" class="${annEd.when===v?'on':''}" onclick="annSet('when','${v}')" ${s&&v==='now'?'disabled':''}>${l}</button>`).join('')}</div>
+    <div id="an-later" class="${annEd.when==='later'?'':'hidden'}">
+      <div class="two" style="margin-top:12px"><div><input class="field" type="date" id="an-date" value="${annEd.date}" min="${iso(new Date())}" onchange="annEd.date=this.value;annHint()"></div>
+      <div><input class="field" type="time" id="an-time" value="${annEd.time}" onchange="annEd.time=this.value;annHint()"></div></div>
+      <div class="quick">${[['h1','Через час'],['t18','Сегодня 18:00'],['m9','Завтра 09:00'],['m20','Завтра 20:00']].map(([k,l])=>`<button type="button" class="pill" onclick="annQuick('${k}')">${l}</button>`).join('')}</div>
+      <select class="field" id="an-rep" style="margin-top:12px" onchange="annEd.repeat=this.value;annHint()">${Object.entries(REPEAT_LABELS).map(([v,l])=>`<option value="${v}" ${annEd.repeat===v?'selected':''}>${l}</option>`).join('')}</select>
+      <div class="when-hint" id="an-hint"></div>
+    </div>`}
     <div class="acc-group"><div class="acc-row"><span class="lbl"><span class="ib" style="background:#ff9f0a">${ic('pin',17)}</span>Закрепить сверху</span>
-      <button class="switch ${a&&a.pinned?'on':''}" id="an-p" role="switch" onclick="this.classList.toggle('on')" aria-label="Закрепить"></button></div></div>
-    <div class="actions"><button class="btn primary" onclick="saveAnn(${a?a.id:'null'})">${a?'Сохранить':'Опубликовать'}</button></div>`;
-  $('ov').classList.add('on');
-  if(matchMedia('(hover:hover)').matches)setTimeout(()=>{if(!document.activeElement||document.activeElement===document.body)$('an-t').focus()},60);
+      <button class="switch ${src&&src.pinned?'on':''}" id="an-p" role="switch" onclick="this.classList.toggle('on')" aria-label="Закрепить"></button></div></div>
+    <div class="actions"><button class="btn primary" id="an-save" onclick="saveAnn()"></button></div>`;
+  $('ov').classList.add('on');annLabel();annHint();
+  if(matchMedia('(hover:hover)').matches)setTimeout(()=>{if(document.activeElement===document.body)$('an-t').focus()},60);
 }
-async function saveAnn(id){
-  const body={title:$('an-t').value.trim(),body:$('an-b').value.trim(),pinned:$('an-p').classList.contains('on')};
+function annSet(k,v){
+  annEd[k]=v;
+  const box={kind:'an-kind',who:'an-who',when:'an-when'}[k];
+  document.querySelectorAll(`#${box} button`).forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  if(k==='who')$('an-pick-box').classList.toggle('hidden',v!=='some');
+  if(k==='when')$('an-later').classList.toggle('hidden',v!=='later');
+  if(k==='kind')$('an-t').placeholder=v==='reminder'?'Например, Сдать инвентаризацию':'Например, Инвентаризация в понедельник';
+  annLabel();annHint();
+}
+function annPick(id,btn){annEd.picked.has(id)?annEd.picked.delete(id):annEd.picked.add(id);btn.classList.toggle('on',annEd.picked.has(id));annLabel()}
+function annQuick(k){
+  const d=new Date();
+  if(k==='h1'){d.setMinutes(d.getMinutes()+60,0,0)}
+  else if(k==='t18'){d.setHours(18,0,0,0);if(d<new Date())d.setDate(d.getDate()+1)}
+  else{d.setDate(d.getDate()+1);d.setHours(k==='m9'?9:20,0,0,0)}
+  annEd.date=iso(d);annEd.time=`${pad(d.getHours())}:${pad(d.getMinutes())}`;$('an-date').value=annEd.date;$('an-time').value=annEd.time;annHint();
+}
+function annTs(){if(!annEd.date||!annEd.time)return 0;const[y,m,d]=annEd.date.split('-').map(Number),[h,mi]=annEd.time.split(':').map(Number);return Math.floor(new Date(y,m-1,d,h,mi).getTime()/1000)}
+function annHint(){
+  const el=$('an-hint');if(!el||annEd.when!=='later')return;
+  const ts=annTs();
+  el.textContent=!ts?'Укажите дату и время':ts<=Date.now()/1000?'Это время уже прошло — выберите время в будущем':`Отправим ${fmtWhen(ts)} (${fmtIn(ts)})`+(annEd.repeat?`, дальше — ${REPEAT_LABELS[annEd.repeat].toLowerCase()}`:'');
+}
+function annLabel(){
+  const b=$('an-save');if(!b)return;
+  if(annEd.id){b.textContent='Сохранить';return}
+  const n=annEd.who==='some'?annEd.picked.size:0;
+  b.textContent=annEd.schedId?'Сохранить':annEd.when==='later'?'Запланировать':n?`Отправить ${n===1?'лично':n+' '+plural(n,'сотруднику','сотрудникам','сотрудникам')}`:(annEd.kind==='reminder'?'Отправить напоминание':'Опубликовать');
+}
+async function saveAnn(){
+  const body={title:$('an-t').value.trim(),body:$('an-b').value.trim(),pinned:$('an-p').classList.contains('on'),kind:annEd.kind};
   if(!body.title&&!body.body)return toast('Напишите заголовок или текст');
-  const r=await run(()=>api(id?`/api/announcements/${id}`:'/api/announcements',{method:id?'PUT':'POST',body}));
+  if(!annEd.id){
+    if(annEd.who==='some'){if(!annEd.picked.size)return toast('Выберите, кому отправить');body.audience=[...annEd.picked]}
+    if(annEd.when==='later'){const ts=annTs();if(!ts||ts<=Date.now()/1000+30)return toast('Выберите время в будущем');body.send_at=ts;body.repeat=annEd.repeat}
+  }
+  const path=annEd.id?`/api/announcements/${annEd.id}`:annEd.schedId?`/api/scheduled/${annEd.schedId}`:'/api/announcements';
+  const r=await run(()=>api(path,{method:annEd.id||annEd.schedId?'PUT':'POST',body}));
   if(!r)return;closeSheet();
-  toast(r.queued?'Нет сети — опубликуем, когда появится связь':(id?'Сохранено':'Опубликовано — команда получит уведомление'));
+  toast(r.queued?'Нет сети — отправим, когда появится связь':annEd.id||annEd.schedId?'Сохранено':r.status==='scheduled'?`Запланировано на ${fmtWhen(r.send_at)}`:body.audience?'Отправлено — адресаты получат уведомление':'Опубликовано — команда получит уведомление');
   if(!r.queued)loadNews();
+}
+async function cancelSched(id){
+  const s=schedList.find(x=>x.id===id);
+  if(!await askConfirm('Отменить отправку?',s?`«${s.title||s.body.slice(0,60)}» ${fmtWhen(s.send_at)}${s.repeat?' и все повторы':''}.`:'','Отменить отправку',true))return;
+  const r=await run(()=>api(`/api/scheduled/${id}`,{method:'DELETE'}));
+  if(r){schedList=schedList.filter(x=>x.id!==id);renderNews();toast('Отправка отменена')}
 }
 async function deleteAnn(id){
   if(!await askConfirm('Удалить объявление?','Оно исчезнет у всех сотрудников.','Удалить',true))return;
   const r=await run(()=>api(`/api/announcements/${id}`,{method:'DELETE'}));
   if(r){annList=annList.filter(x=>x.id!==id);renderNews();toast('Объявление удалено')}
+}
+
+/* ---------- ПАРОЛЬ ---------- */
+function openPassword(forced){
+  $('sheet').innerHTML=`${forced?'':`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>`}
+    <h2>Сменить пароль</h2><p class="sub">Минимум 8 символов. На других устройствах потребуется войти заново.</p>
+    ${forced?`<div class="pw-note">На мастер-аккаунте стоит заводской пароль — его знает любой, кто видел код приложения. Смените его сейчас.</div>`:''}
+    <label class="lb" for="pw-old">Текущий пароль</label><input class="field" type="password" id="pw-old" autocomplete="current-password">
+    <label class="lb" for="pw-new">Новый пароль</label><input class="field" type="password" id="pw-new" autocomplete="new-password" minlength="8">
+    <label class="lb" for="pw-new2">Повторите новый пароль</label><input class="field" type="password" id="pw-new2" autocomplete="new-password" onkeydown="if(event.key==='Enter')savePassword()">
+    <div class="actions"><button class="btn primary" onclick="savePassword()">Сменить пароль</button></div>`;
+  $('ov').classList.add('on');setTimeout(()=>{if(matchMedia('(hover:hover)').matches)$('pw-old').focus()},60);
+}
+async function savePassword(){
+  const o=$('pw-old').value,n=$('pw-new').value,n2=$('pw-new2').value;
+  if(!o)return toast('Введите текущий пароль');
+  if(n.length<8)return toast('Новый пароль — минимум 8 символов');
+  if(n!==n2)return toast('Пароли не совпадают');
+  if(!navigator.onLine)return toast('Для смены пароля нужен интернет');
+  const r=await run(()=>api('/api/me/password',{method:'PUT',body:{old_password:o,new_password:n}}));
+  if(!r||r.queued)return;
+  me.must_change_password=false;localStorage.setItem('tugai_me',JSON.stringify(me));
+  const wasForced=!!$('sheet').querySelector('.pw-note');
+  closeSheet();toast(r.closed_sessions?`Пароль изменён. Выход на других устройствах: ${r.closed_sessions}`:'Пароль изменён');
+  if(wasForced)setTimeout(()=>location.reload(),900);
+}
+async function resetPassword(id){
+  const name=(users.find(u=>u.id===id)||{}).name||'сотрудник';
+  if(!await askConfirm(`Сбросить пароль · ${name}?`,'Будет создан временный пароль, а сотрудник выйдет со всех устройств. Передайте ему новый пароль лично.','Сбросить',true))return;
+  const r=await run(()=>api(`/api/users/${id}/reset_password`,{method:'POST'}));
+  if(!r||r.queued)return;
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
+    <h2>Временный пароль</h2><p class="sub">${esc(name)} входит с ним и меняет его в «Аккаунт» → «Сменить пароль». Пароль показывается один раз.</p>
+    <div class="temp-pw" id="tmp-pw">${esc(r.password)}</div>
+    <div class="actions"><button class="btn primary" onclick="copyTempPw()">Скопировать</button></div>`;
+  $('ov').classList.add('on');
+}
+async function copyTempPw(){try{await navigator.clipboard.writeText($('tmp-pw').textContent);toast('Скопировано')}catch(e){toast('Выделите пароль и скопируйте вручную')}}
+
+/* ---------- COOKIE СЕССИИ: фото и скачивания без токена в адресе ---------- */
+async function ensureCookie(){
+  if(!token||!navigator.onLine)return;
+  const k=token.slice(0,10)+iso(new Date());   // раз в день продлеваем cookie
+  if(localStorage.getItem('tugai_ck')===k)return;
+  try{const r=await fetch('/api/session/cookie',{method:'POST',headers:{Authorization:'Bearer '+token}});if(r.ok)localStorage.setItem('tugai_ck',k)}catch(e){}
+}
+
+
+/* ---------- ЖУРНАЛ ДЕЙСТВИЙ (только мастер) ---------- */
+const LOG_CAT_COLORS={auth:'#0a84ff',users:'#5e5ce6',menu:'#30b0c7',stop:'#ff453a',orders:'#ff9f0a',schedule:'#bf5af2',checklist:'#30d158',
+  reports:'#5856d6',shame:'#ff375f',news:'#64d2ff',notes:'#d6a100',push:'#ff9f0a',archive:'#8e8e93',logs:'#8e8e93',system:'#8e8e93',other:'#8e8e93'};
+const isMaster=()=>me&&me.role==='master';
+let logState={items:[],hasMore:false,total:0,loading:false,stats:null,exports:[]};
+let logF={q:'',category:'',user_id:'',range:'7',date_from:'',date_to:'',result:''};
+let logSearchTimer=null;
+function logParams(extra={}){
+  const p=new URLSearchParams();const f={...logF};
+  if(f.range&&f.range!=='custom'){f.date_to='';f.date_from=f.range==='all'?'':iso(addDays(new Date(),-(+f.range-1)))}
+  ['q','category','user_id','date_from','date_to','result'].forEach(k=>{if(f[k])p.set(k,f[k])});
+  Object.entries(extra).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')p.set(k,v)});
+  return p;
+}
+const logFiltered=()=>!!(logF.q||logF.category||logF.user_id||logF.result||logF.range!=='all');
+async function loadLogs(){
+  if(!isMaster())return;
+  renderLogFilters();
+  const [st,ex]=await Promise.all([api('/api/logs/stats').catch(()=>null),api('/api/logs/exports').catch(()=>null)]);
+  if(st){logState.stats=st;renderLogStats();renderLogFilters()}
+  if(ex){logState.exports=ex}
+  renderLogExport();
+  await fetchLogs(true);
+}
+async function fetchLogs(reset){
+  if(logState.loading)return;logState.loading=true;
+  if(reset){logState.items=[];renderLogList(true)}
+  const last=logState.items[logState.items.length-1];
+  const r=await run(()=>api('/api/logs?'+logParams({limit:100,before_id:reset?'':last&&last.id})));
+  logState.loading=false;
+  if(!r){renderLogList();return}
+  logState.items=reset?r.items:logState.items.concat(r.items);logState.hasMore=r.has_more;logState.total=r.total;
+  renderLogList();
+}
+function renderLogStats(){
+  const s=logState.stats;if(!s)return;
+  $('lg-stats').innerHTML=[[s.today,'событий сегодня'],[s.active_today,plural(s.active_today,'сотрудник активен','сотрудника активны','сотрудников активны')+' сегодня'],
+    [s.week,'событий за 7 дней'],[s.fails_week,'отказов и ошибок за 7 дней',s.fails_week>0]]
+    .map(([n,l,w])=>`<div class="lg-stat ${w?'warn':''}"><b>${Number(n||0).toLocaleString('ru-RU')}</b><span>${esc(l)}</span></div>`).join('');
+}
+function renderLogExport(){
+  const s=logState.stats,ex=logState.exports||[];
+  const next=s&&s.next_auto_export?`Следующая автоматическая выгрузка — ${esc(fmtLong(s.next_auto_export))} (${esc(fmtIn(s.next_auto_export))}).`:'Журнал автоматически выгружается в архив каждые 3 дня.';
+  const auto=ex.filter(e=>e.kind==='auto'),manual=ex.filter(e=>e.kind==='manual');
+  const row=e=>`<div class="row"><div style="display:flex;gap:12px;align-items:center;min-width:0"><span class="ib" style="width:32px;height:32px;border-radius:10px;background:${e.kind==='auto'?'#5e5ce6':'#30b0c7'};color:#fff;display:flex;align-items:center;justify-content:center;flex:none">${ic('archive',17)}</span>
+    <div style="min-width:0"><div class="t">${e.kind==='auto'?'Автовыгрузка':'Выгрузка вручную'} · ${esc(fmtLong(e.created_at))}</div><div class="s">${Number(e.count).toLocaleString('ru-RU')} ${plural(e.count,'событие','события','событий')} · ${fmtSize(e.size)}${e.from_ts?` · ${esc(fmtDay(e.from_ts))} — ${esc(fmtDay(e.to_ts))}`:''}</div></div></div>
+    <a class="btn sm" href="/api/logs/exports/${e.id}/download" download>${ic('download',15)}ZIP</a></div>`;
+  $('lg-export').innerHTML=`<div class="panel"><div class="lg-export"><span class="ib" style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#5e5ce6,#0a84ff);color:#fff;display:flex;align-items:center;justify-content:center;flex:none">${ic('archive',26)}</span>
+      <div class="meta"><b>Выгрузка журнала</b><span>Один ZIP: полный журнал, папки по категориям, по датам и по сотрудникам. Файлы открываются в Excel и Numbers.</span><span>${next}</span></div>
+      <div class="btns"><button class="btn primary" onclick="exportLogs('all')">${ic('download',17)}Все логи · ZIP</button>
+      <button class="btn" onclick="exportLogs('filter')" ${logFiltered()?'':'disabled'} id="lg-exp-f">По фильтру · ZIP</button>
+      <button class="btn ghost" onclick="exportLogs('csv')">CSV</button></div></div>
+    ${ex.length?`<div class="lg-exports">
+      ${auto.length?`<label class="lb">Автоматические выгрузки · ${auto.length}</label><div class="acc-group" style="margin-top:0">${auto.slice(0,6).map(row).join('')}</div>`:''}
+      ${manual.length?`<label class="lb">Недавние ручные выгрузки</label><div class="acc-group" style="margin-top:0">${manual.slice(0,3).map(row).join('')}</div>`:''}
+      ${auto.length>6?`<button class="btn ghost sm" style="margin-top:8px" onclick="showAllExports()">Все автоматические выгрузки (${auto.length})</button>`:''}</div>`:''}</div>`;
+}
+function showAllExports(){
+  const ex=(logState.exports||[]).filter(e=>e.kind==='auto');
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button><h2>Автоматические выгрузки</h2><p class="sub">Каждые 3 дня — журнал за прошедший период. Хранятся последние 30.</p>
+    <div class="acc-group">${ex.map(e=>`<div class="acc-row"><span class="lbl" style="min-width:0"><span style="min-width:0"><b style="font-weight:500">${esc(fmtLong(e.created_at))}</b><br><span class="muted" style="font-size:13px">${Number(e.count).toLocaleString('ru-RU')} событий · ${fmtSize(e.size)}</span></span></span><a class="btn sm" href="/api/logs/exports/${e.id}/download" download>${ic('download',15)}ZIP</a></div>`).join('')}</div>`;
+  $('ov').classList.add('on');
+}
+function fmtSize(b){b=+b||0;return b>1048576?(b/1048576).toFixed(1).replace('.',',')+' МБ':Math.max(1,Math.round(b/1024))+' КБ'}
+function fmtDay(ts){return new Date(ts*1000).toLocaleDateString('ru-RU',{day:'numeric',month:'short'})}
+async function exportLogs(kind){
+  if(!navigator.onLine)return toast('Для выгрузки нужен интернет');
+  const f=kind==='all'?{}:Object.fromEntries(logParams().entries());
+  toast(kind==='all'?'Собираем архив со всеми логами…':'Готовим выгрузку по фильтру…');
+  const r=await run(()=>api('/api/logs/export',{method:'POST',body:{...f,format:kind==='csv'?'csv':'zip'}}));
+  if(!r||r.queued)return;
+  const a=document.createElement('a');a.href=`/api/logs/exports/${r.id}/download`;a.download='';document.body.appendChild(a);a.click();a.remove();
+  toast(`Готово: ${Number(r.count).toLocaleString('ru-RU')} ${plural(r.count,'событие','события','событий')}`);
+  const ex=await api('/api/logs/exports').catch(()=>null);if(ex){logState.exports=ex;renderLogExport()}
+}
+function renderLogFilters(){
+  const s=logState.stats,box=$('lg-filters');if(!box)return;
+  const cats=(s?s.categories:Object.keys(LOG_CAT_COLORS).map(k=>({key:k,label:k,count:0})));
+  const people=s?s.users:[];
+  const rng=[['1','Сегодня'],['7','7 дней'],['30','30 дней'],['all','Всё время'],['custom','Даты…']];
+  box.innerHTML=`<input class="search" id="lg-q" type="search" placeholder="Поиск: имя, действие, позиция, текст…" value="${esc(logF.q)}" oninput="logSearch(this.value)">
+    <div class="lg-filters">
+      <select class="field" id="lg-user" onchange="setLogF('user_id',this.value)" aria-label="Сотрудник">
+        <option value="">Все сотрудники</option>
+        ${people.map(u=>`<option value="${u.id}" ${String(logF.user_id)===String(u.id)?'selected':''}>${esc(u.name)} · ${Number(u.count).toLocaleString('ru-RU')}</option>`).join('')}
+        <option value="system" ${logF.user_id==='system'?'selected':''}>⚙︎ Система (автоматические события)${s?` · ${s.system_count}`:''}</option>
+        <option value="unknown" ${logF.user_id==='unknown'?'selected':''}>Без входа (неудачные попытки)${s?` · ${s.unknown_count}`:''}</option>
+      </select>
+      <select class="field" id="lg-cat" onchange="setLogF('category',this.value)" aria-label="Раздел">
+        <option value="">Все разделы</option>
+        ${cats.filter(c=>c.count||c.key===logF.category).map(c=>`<option value="${c.key}" ${logF.category===c.key?'selected':''}>${esc(c.label)} · ${Number(c.count).toLocaleString('ru-RU')}</option>`).join('')}
+      </select>
+    </div>
+    ${logF.range==='custom'?`<div class="lg-dates"><div><label class="lb" style="margin-top:0">С</label><input class="field" type="date" value="${logF.date_from}" onchange="setLogF('date_from',this.value)"></div><div><label class="lb" style="margin-top:0">По</label><input class="field" type="date" value="${logF.date_to}" onchange="setLogF('date_to',this.value)"></div></div>`:''}
+    <div class="lg-tools">
+      <div class="pills" style="padding:0;flex:1;min-width:0">${rng.map(([v,l])=>`<button class="pill ${logF.range===v?'on':''}" onclick="setLogF('range','${v}')">${l}</button>`).join('')}</div>
+      <div class="seg">${[['','Все'],['ok','Успешно'],['fail','Отказы']].map(([v,l])=>`<button class="${logF.result===v?'on':''}" onclick="setLogF('result','${v}')">${l}</button>`).join('')}</div>
+      ${logFiltered()&&!(logF.range==='7'&&!logF.q&&!logF.category&&!logF.user_id&&!logF.result)?`<button class="btn ghost sm" onclick="resetLogF()">Сбросить</button>`:''}
+    </div>`;
+}
+function logSearch(v){clearTimeout(logSearchTimer);logSearchTimer=setTimeout(()=>{logF.q=v.trim();fetchLogs(true);updateLogExpBtn()},320)}
+function setLogF(k,v){
+  logF[k]=v;
+  if(k==='range'&&v==='custom'&&!logF.date_from){logF.date_from=iso(addDays(new Date(),-6));logF.date_to=iso(new Date())}
+  const focus=document.activeElement&&document.activeElement.id==='lg-q';
+  renderLogFilters();if(focus)$('lg-q').focus();
+  fetchLogs(true);updateLogExpBtn();
+}
+function resetLogF(){logF={q:'',category:'',user_id:'',range:'7',date_from:'',date_to:'',result:''};renderLogFilters();fetchLogs(true);updateLogExpBtn()}
+function updateLogExpBtn(){const b=$('lg-exp-f');if(b)b.disabled=!logFiltered()}
+function logWho(it){
+  if(it.role==='system')return `<span class="lg-sys" title="Система">${ic('clock',17)}</span>`;
+  if(!it.user_id)return `<span class="lg-sys unk" title="Без входа">${ic('lock',16)}</span>`;
+  return avatar(it.user_name,'sm');
+}
+function logDayLabel(ts){
+  const d=new Date(ts*1000),now=new Date(),y=addDays(now,-1);
+  if(d.toDateString()===now.toDateString())return 'Сегодня';
+  if(d.toDateString()===y.toDateString())return 'Вчера';
+  return d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',...(d.getFullYear()!==now.getFullYear()?{year:'numeric'}:{})});
+}
+function renderLogList(loading){
+  const el=$('lg-list'),cnt=$('lg-count');if(!el)return;
+  const it=logState.items;
+  cnt.innerHTML=loading?'<span>Загрузка…</span>':`<span>${logState.total?`Найдено: ${Number(logState.total).toLocaleString('ru-RU')} ${plural(logState.total,'событие','события','событий')}`:''}</span>`;
+  if(loading&&!it.length){el.innerHTML=`<div class="lg-list"><div class="row muted">Загружаем журнал…</div></div>`;return}
+  if(!it.length){el.innerHTML=`<div class="empty-card">${ic('list',34)}<b>Ничего не найдено</b>Попробуйте изменить фильтры или период.</div>`;return}
+  let html='',day='';
+  for(const x of it){
+    const dl=logDayLabel(x.ts);
+    if(dl!==day){html+=`<div class="lg-day">${esc(dl)}</div>`;day=dl}
+    const t=new Date(x.ts*1000).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+    html+=`<button class="lg-row" onclick="openLog(${x.id})"><span class="lg-time">${t}</span>${logWho(x)}
+      <span class="lg-main"><span class="t"><b>${esc(x.user_name)}</b> · ${esc(x.action)}${x.ok?'':'<span class="lg-fail">отказ</span>'}</span>
+      ${x.note?`<span class="n">${esc(x.note)}</span>`:''}<span class="n lg-mob">${t} · ${esc(x.category_label)}${x.note?' · '+esc(x.note):''}</span></span>
+      <span class="lg-cat" style="--cc:${LOG_CAT_COLORS[x.category]||'#8e8e93'}">${esc(x.category_label)}</span></button>`;
+  }
+  el.innerHTML=`<div class="lg-list">${html}</div>${logState.hasMore?`<div class="lg-more"><button class="btn" id="lg-more-btn" onclick="fetchLogs(false)">Показать ещё</button></div>`:''}`;
+  const more=$('lg-more-btn');
+  if(more&&'IntersectionObserver' in window){const io=new IntersectionObserver(es=>{if(es[0].isIntersecting){io.disconnect();fetchLogs(false)}},{rootMargin:'300px'});io.observe(more)}
+}
+const LOG_KEY_LABELS={username:'Логин',name:'Имя',title:'Заголовок',body:'Текст',caption:'Подпись',item_name:'Позиция',quantity:'Количество',comment:'Комментарий',
+  note:'Заметка',role:'Роль',user_id:'Сотрудник (id)',date:'Дата',start:'Начало',end:'Конец',shift:'Смена',checked:'Отмечено',pinned:'Закреплено',
+  audience:'Получатели (id)',send_at:'Время отправки',repeat:'Повтор',kind:'Тип',menu_item_id:'Позиция меню (id)',text:'Текст',_files:'Файлы',_size_kb:'Размер, КБ',
+  _query:'Параметры',_login:'Логин',shifts_added:'Добавлены смены',shifts_removed:'Сняты смены',slot:'Чек-поинт',shift_id:'Смена (id)',tagged_user_id:'Отмечен (id)'};
+function fmtVal(k,v){
+  if(k==='send_at'&&typeof v==='number')return fmtLong(v);
+  if(typeof v==='boolean')return v?'да':'нет';
+  if(Array.isArray(v))return v.map(x=>typeof x==='object'?JSON.stringify(x):String(x)).join('\n');
+  if(v&&typeof v==='object')return Object.entries(v).map(([a,b])=>`${a}: ${typeof b==='object'?JSON.stringify(b):b}`).join('\n');
+  return String(v??'');
+}
+function uaShort(ua){
+  if(!ua)return '—';
+  const os=/iPhone|iPad/.test(ua)?'iPhone / iPad':/Android/.test(ua)?'Android':/Mac OS X/.test(ua)?'Mac':/Windows/.test(ua)?'Windows':/Linux/.test(ua)?'Linux':'';
+  const br=/CriOS|Chrome\//.test(ua)&&!/Edg/.test(ua)?'Chrome':/Edg/.test(ua)?'Edge':/Firefox|FxiOS/.test(ua)?'Firefox':/Safari/.test(ua)?'Safari':'';
+  return [os,br].filter(Boolean).join(' · ')||ua.slice(0,60);
+}
+function openLog(id){
+  const x=logState.items.find(i=>i.id===id);if(!x)return;
+  const det=x.details&&typeof x.details==='object'?Object.entries(x.details).filter(([k,v])=>v!==''&&v!==null&&!(Array.isArray(v)&&!v.length)):[];
+  const d=new Date(x.ts*1000);
+  $('sheet').innerHTML=`<button class="sheet-close" onclick="closeSheet()" aria-label="Закрыть">${ic('x')}</button>
+    <div class="lg-head">${logWho(x)}<div><div class="big">${esc(x.action)}</div><div class="muted" style="font-size:15px;margin-top:2px">${esc(x.user_name)}${x.role&&x.role!=='system'?' · '+esc(ROLES[x.role]||x.role):''}</div></div></div>
+    ${x.note?`<p style="font-size:17px;line-height:1.45;margin:16px 0 0">${esc(x.note)}</p>`:''}
+    <dl class="kv">
+      <div><dt>Когда</dt><dd>${esc(d.toLocaleString('ru-RU',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}))}</dd></div>
+      <div><dt>Раздел</dt><dd><span class="lg-cat" style="--cc:${LOG_CAT_COLORS[x.category]||'#8e8e93'}">${esc(x.category_label)}</span></dd></div>
+      <div><dt>Результат</dt><dd>${x.ok?`<span style="color:var(--green)">Успешно</span>`:`<span style="color:var(--red)">Отказ / ошибка</span>`}${x.status?` · код ${x.status}`:''}</dd></div>
+      ${x.ip?`<div><dt>IP-адрес</dt><dd>${esc(x.ip)}</dd></div>`:''}
+      ${x.ua?`<div><dt>Устройство</dt><dd title="${esc(x.ua)}">${esc(uaShort(x.ua))}</dd></div>`:''}
+      ${x.path?`<div><dt>Запрос</dt><dd style="font-family:ui-monospace,Menlo,monospace;font-size:13px">${esc(x.method)} ${esc(x.path)}</dd></div>`:''}
+    </dl>
+    ${det.length?`<label class="lb">Подробности</label><dl class="kv" style="margin-top:0">${det.map(([k,v])=>`<div><dt>${esc(LOG_KEY_LABELS[k]||k)}</dt><dd>${esc(fmtVal(k,v))}</dd></div>`).join('')}</dl>`:''}
+    <div class="actions">${x.user_id?`<button class="btn" onclick="closeSheet();logF.user_id='${x.user_id}';renderLogFilters();fetchLogs(true);updateLogExpBtn()">${ic('list',17)}Все действия · ${esc(x.user_name)}</button>`:''}</div>`;
+  $('ov').classList.add('on');
 }
 
 /* ---------- ЧЕК-ЛИСТ ---------- */
@@ -1988,6 +2401,10 @@ const ICON_PATHS={
   pin:'<path d="M9 4h6l-1 6 3 3H7l3-3-1-6zM12 13v7"/>',
   stop:'<path d="M8.5 3h7L21 8.5v7L15.5 21h-7L3 15.5v-7z"/><path d="M8 12h8"/>',
   hand:'<path d="M8 13V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v8a7 7 0 01-7 7h-.5a6 6 0 01-5-2.7L3 15.5a1.6 1.6 0 012.6-1.8L8 16"/>',
+  user:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0114 0"/>',
+  lock:'<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 017 0v3"/>',
+  key:'<circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2"/>',
+  list:'<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
   megaphone:'<path d="M3 10v4a1 1 0 001 1h3l6 4V5L7 9H4a1 1 0 00-1 1z"/><path d="M17 8.5a5 5 0 010 7M19.5 6a8.5 8.5 0 010 12"/>',
 };
 function ic(n,size=20){return `<svg class="i" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[n]||''}</svg>`}
@@ -2211,7 +2628,7 @@ async function loadPhotos(){
   if(canEdit())loadTeamReports();
 }
 function reloadReports(){loadPhotos()}
-const reportPhotoUrl=(rid,pid)=>`/api/shifts/reports/${rid}/photos/${pid}/file?token=${encodeURIComponent(token||'')}`;
+const reportPhotoUrl=(rid,pid)=>`/api/shifts/reports/${rid}/photos/${pid}/file`;   // доступ — по HttpOnly-cookie сессии
 function reportSlotLabel(slot){return String(slot||'').startsWith('extra_')?'Дополнительный отчёт':`Отчёт к ${slot}`}
 function reportBody(rep){
   const n=(rep.photos||[]).length;
@@ -2336,7 +2753,7 @@ async function loadShame(){
   const r=await run(()=>api('/api/shame'));if(!r)return;
   shameList=r;renderShame();
 }
-const shamePhotoUrl=(postId,pid)=>`/api/shame/${postId}/photos/${pid}/file?token=${encodeURIComponent(token||'')}`;
+const shamePhotoUrl=(postId,pid)=>`/api/shame/${postId}/photos/${pid}/file`;
 function shameTagOptions(selected){
   return '<option value="">Никого не отмечать</option>'+staffList.filter(u=>u.id!==me.id).map(u=>`<option value="${u.id}" ${selected===u.id?'selected':''}>${esc(u.name)} — ${esc(ROLES[u.role]||'')}</option>`).join('');
 }
@@ -2439,6 +2856,7 @@ function openAccount(){
     <div class="seg full" id="acc-theme">${[['auto','Авто'],['light','Светлое'],['dark','Тёмное']].map(([v,l])=>`<button data-v="${v}" class="${theme===v?'on':''}" onclick="setTheme('${v}')">${l}</button>`).join('')}</div>
     <div id="acc-push-box">${pushRowHtml()}</div>
     <div id="acc-prefs"></div>
+    <div class="acc-group"><button class="acc-row" style="width:100%;border:0;background:none;color:inherit;font:inherit;cursor:pointer;text-align:left" onclick="openPassword()"><span class="lbl"><span class="ib" style="background:#8e8e93">${ic('key',17)}</span>Сменить пароль</span><span style="color:var(--ter)">${ic('chevR',18)}</span></button></div>
     <div class="actions"><button class="btn danger" onclick="logout()">${ic('logout',18)}Выйти из аккаунта</button></div>`;
   $('ov').classList.add('on');renderPushPrefs();loadPushPrefs();
 }
@@ -2619,13 +3037,13 @@ function archiveRow(a){
     :[`${a.category==='shame'?'Стена позора':'Отчёты смен'} · ${a.item_count} фото`];
   return `<div class="arch-file"><span class="ib">${ic('archive',22)}</span>
     <div class="meta"><b>Архив от ${esc(fmtLong(a.created_at))}</b><span>${parts.map(esc).join(' · ')}</span></div>
-    <a class="btn primary sm" href="/api/archives/${a.id}/download?token=${encodeURIComponent(token||'')}" download>${ic('download',16)}Скачать ZIP</a></div>`;
+    <a class="btn primary sm" href="/api/archives/${a.id}/download" download>${ic('download',16)}Скачать ZIP</a></div>`;
 }
 function renderArchives(){
   const next=archiveInfo?`<div class="arch-next"><span class="ib">${ic('clock',26)}</span><div><b>Следующая архивация — ${esc(fmtLong(archiveInfo.next_at))}</b><span>${esc(fmtIn(archiveInfo.next_at))} · каждые ${archiveInfo.interval_days} ${plural(archiveInfo.interval_days,'день','дня','дней')}</span></div></div>`:'<div></div>';
   const files=archivesList.length?archivesList.map(archiveRow).join('')
     :`<div class="arch-file"><span class="ib" style="background:var(--fill);color:var(--ter)">${ic('archive',22)}</span><div class="meta"><b>Архива пока нет</b><span>Он появится после первой архивации.</span></div></div>`;
-  $('archive-box').innerHTML=`<div class="arch-card">${next}<button class="btn" onclick="forceArchive()">${ic('archive',17)}Архивировать сейчас</button>${files}</div>`;
+  $('archive-box').innerHTML=`<div class="arch-card">${next}${isAdmin()?`<button class="btn" onclick="forceArchive()">${ic('archive',17)}Архивировать сейчас</button>`:''}${files}</div>`;
 }
 async function forceArchive(){
   if(!await askConfirm('Архивировать сейчас?','Все текущие отчёты и записи стены позора будут упакованы в ZIP и убраны из приложения. Предыдущий архив удалится.','Архивировать'))return;
@@ -2643,11 +3061,11 @@ async function loadTeam(){
   const pend=users.filter(u=>u.status==='pending'),act=users.filter(u=>u.status==='approved');
   $('pending').innerHTML=pend.length?pend.map(u=>`<div class="row"><div style="display:flex;gap:12px;align-items:center">${avatar(u.name,'sm')}<div><div class="t">${esc(u.name)}</div><div class="s">@${esc(u.username)} · ${esc(u.created_at||'')}</div></div></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${roleSelect({id:u.id,role:'bartender'})}
-    <button class="btn sm primary" onclick="approve(${u.id})">Подтвердить</button><button class="btn sm danger" onclick="removeUser(${u.id},'Отклонить заявку')">Отклонить</button></div></div>`).join(''):'<div class="row muted">Новых заявок нет</div>';
+    <button class="btn sm primary" onclick="approve(${u.id})">Подтвердить</button><button class="btn sm danger" onclick="removeUser(${u.id},'reject')">Отклонить</button></div></div>`).join(''):'<div class="row muted">Новых заявок нет</div>';
   $('staff').innerHTML=act.map(u=>{
     const locked=u.role==='master'||u.id===me.id;
     return `<div class="row"><div style="display:flex;gap:12px;align-items:center;min-width:0">${avatar(u.name,'sm')}<div><div class="t">${esc(u.name)}${u.id===me.id?' <span class="muted">· вы</span>':''}</div><div class="s">@${esc(u.username)}</div></div></div>
-      ${locked?`<span class="muted">${ROLES[u.role]}</span>`:`<div style="display:flex;gap:8px;align-items:center">${roleSelect(u,`setRole(${u.id},this.value)`)}<button class="btn icon sm danger" onclick="removeUser(${u.id},'Удалить сотрудника ${esc(u.name)}')" aria-label="Удалить сотрудника">${ic('trash',17)}</button></div>`}</div>`}).join('');
+      ${locked?`<span class="muted">${ROLES[u.role]}</span>`:`<div style="display:flex;gap:8px;align-items:center">${roleSelect(u,`setRole(${u.id},this.value)`)}<button class="btn icon sm" onclick="resetPassword(${u.id})" aria-label="Сбросить пароль" title="Сбросить пароль">${ic('key',17)}</button><button class="btn icon sm danger" onclick="removeUser(${u.id},'del')" aria-label="Удалить сотрудника">${ic('trash',17)}</button></div>`}</div>`}).join('');
   $('menu-list').innerHTML=menu.map(i=>`<div class="row"><div><div class="t">${esc(i.title)}</div><div class="s">${i.tab==='pf'?'ПФ':'Напитки'}</div></div><button class="btn icon sm danger" onclick="delMenu(${i.id})" aria-label="Удалить позицию">${ic('trash',17)}</button></div>`).join('');
 }
 async function approve(id){
@@ -2655,7 +3073,7 @@ async function approve(id){
   if(r){toast('Аккаунт подтверждён');loadTeam()}
 }
 async function setRole(id,role){const r=await run(()=>api(`/api/users/${id}/role`,{method:'POST',body:{role}}));if(r)toast('Роль изменена')}
-async function removeUser(id,q){if(!await askConfirm(q+'?','','Удалить',true))return;const r=await run(()=>api(`/api/users/${id}`,{method:'DELETE'}));if(r)loadTeam()}
+async function removeUser(id,kind){const u=users.find(x=>x.id===id)||{};if(!await askConfirm(kind==='reject'?`Отклонить заявку · ${u.name||''}?`:`Удалить сотрудника ${u.name||''}?`,kind==='reject'?'':'Будущие смены сотрудника будут сняты.',kind==='reject'?'Отклонить':'Удалить',true))return;const r=await run(()=>api(`/api/users/${id}`,{method:'DELETE'}));if(r)loadTeam()}
 async function addMenuItem(){
   const title=$('m-title').value.trim();if(!title)return toast('Введите название');
   const cat=$('m-cat').value,ing=$('m-ing').value.split('\n').map(x=>x.trim()).filter(Boolean);
