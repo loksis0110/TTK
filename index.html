@@ -671,6 +671,7 @@ body{background:transparent}
   .mday .n{font-size:12.5px;width:22px;height:22px}.mchip{font-size:9px;padding:1px 3px 1px 5px;border-radius:4px}
   .mchip::before{width:2px}.month-head{font-size:10px;letter-spacing:0}
 }
+.now-badge{display:inline-block;font-size:12px;font-weight:600;color:var(--green);background:var(--green-soft);border-radius:980px;padding:1px 8px;margin-left:4px;vertical-align:1px}
 /* ---------- ГРАФИК: ТАБЛИЦА ---------- */
 .roster-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-sm);margin-bottom:10px;overscroll-behavior-x:contain}
 .roster{border-collapse:separate;border-spacing:0;width:100%;min-width:760px;font-size:14px}
@@ -2662,7 +2663,7 @@ function cpTile(s,cp,mine){
   if(!cp.uploaded&&mine)acts.push(`<button class="btn sm primary" onclick="newReport(${s.shift_id},'${cp.slot}')">${ic('camera',16)}Загрузить</button>`);
   if(!cp.uploaded&&isAdmin()&&!mine)acts.push(`<button class="btn sm" onclick="remindPhotoNow(${s.shift_id},'${cp.slot}')">${ic('bell',16)}Напомнить</button>`);
   return `<div class="cp ${cp.uploaded?'done':(cp.overdue?'overdue':'pending')}">
-    <div class="cp-top"><span class="cp-label">Отчёт к</span></div>
+    <div class="cp-top"><span class="cp-label">Отчёт${cp.date&&cp.date!==iso(new Date())?' '+esc(shiftDayWord(cp.date).toLowerCase()):''} к</span></div>
     <div class="cp-time">${esc(cp.due_at)}</div>
     <div class="cp-status"><span class="dot"></span>${status}</div>
     ${acts.length?`<div class="cp-actions">${acts.join('')}</div>`:''}
@@ -2674,6 +2675,14 @@ function pendingReportHtml(u){
     <div class="post-actions"><button class="btn icon sm" onclick="cancelUpload('${u.id}')" aria-label="Отменить отправку">${ic('x',16)}</button></div></div>
     ${pendingThumbs(u)}${u.meta.caption?`<p class="post-caption">${esc(u.meta.caption)}</p>`:''}</div>`;
 }
+function shiftDayWord(d){
+  if(!d)return 'Смена';
+  const t=new Date(),k=iso(t);
+  if(d===k)return 'Сегодня';
+  if(d===iso(addDays(t,-1)))return 'Вчера';
+  if(d===iso(addDays(t,1)))return 'Завтра';
+  return fromIso(d).toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
+}
 function renderPhotos(){
   releasePendingUrls();
   const shown=new Set();
@@ -2682,7 +2691,7 @@ function renderPhotos(){
     const reports=[...s.checkpoints.filter(cp=>cp.report).map(cp=>cp.report),...(s.extra_reports||[])];
     reports.forEach(r=>shown.add(r.id));
     return `<section class="shift-card">
-      <div class="shift-head">${avatar(s.user_name)}<div><div class="who">${esc(s.user_name)}${mine?' <span class="muted" style="font-weight:400">· вы</span>':''}</div><div class="when">Смена ${esc(s.start)}–${esc(s.end)}</div></div></div>
+      <div class="shift-head">${avatar(s.user_name)}<div><div class="who">${esc(s.user_name)}${mine?' <span class="muted" style="font-weight:400">· вы</span>':''}</div><div class="when">${esc(shiftDayWord(s.date))} · ${esc(s.start)}–${esc(s.end)}${s.state==='current'?' <span class="now-badge">идёт сейчас</span>':s.state==='finished'?' <span class="muted">· закончилась</span>':''}</div></div></div>
       <div class="cp-grid">${s.checkpoints.map(cp=>cpTile(s,cp,mine)).join('')}</div>
       ${reports.map(r=>`<div class="report">${reportBody(r)}</div>`).join('')}
       ${pendingUploads.filter(u=>u.meta&&u.meta.kind==='report'&&+u.meta.shift_id===s.shift_id).map(pendingReportHtml).join('')}

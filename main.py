@@ -2175,35 +2175,64 @@ def report_out(c, r, viewer: dict) -> dict:
 
 @app.get("/api/shifts/photos/status")
 async def photo_status(day: Optional[str] = None, user: dict = Depends(current_user)):
+    """Смены, актуальные сейчас: идущие, предстоящие сегодня и закончившиеся не больше RECENT_SHIFT_HOURS часов назад.
+    У каждой смены — все её чек-поинты, даже если они выпадают на следующий день (ночная смена → отчёт к 08:00 завтра).
+    Раньше ночная смена, начавшаяся сегодня, не показывалась вовсе, а на её месте висела вчерашняя с «просрочен»."""
     target = day or datetime.now(MSK).strftime("%Y-%m-%d")
     parse_day(target)
     prev_day = (parse_day(target) - timedelta(days=1)).strftime("%Y-%m-%d")
     now = datetime.now(MSK)
     admin = user["role"] in TEAM_ROLES
     with db() as c:
-        rows = c.execute(SHIFT_SQL + " WHERE s.day IN (?,?) ORDER BY s.start_time", (target, prev_day)).fetchall()
+        rows = c.execute(SHIFT_SQL + " WHERE s.day IN (?,?) ORDER BY s.day, s.start_time", (target, prev_day)).fetchall()
         result = []
         for r in rows:
             s = shift_dict(r)
             if not s["user_id"] or (not admin and s["user_id"] != user["id"]):
                 continue
-            cps = [cp for cp in photo_checkpoints_for_shift(s) if cp["date"] == target]
+            start_dt, end_dt = shift_bounds(s)
+            if day:                                   # конкретный день: как раньше — чек-поинты этого дня
+                cps = [cp for cp in photo_checkpoints_for_shift(s) if cp["date"] == target]
+            else:
+                if end_dt + timedelta(hours=RECENT_SHIFT_HOURS) < now or start_dt.date() > now.date():
+                    continue                          # давно закончилась или начнётся не сегодня
+                cps = photo_checkpoints_for_shift(s)
             if not cps:
                 continue
+            state = "current" if start_dt <= now < end_dt else ("upcoming" if now < start_dt else "finished")
             reports = {p["slot"]: p for p in c.execute("SELECT * FROM shift_reports WHERE shift_id=?", (s["id"],)).fetchall()}
             checkpoints = []
             for cp in cps:
                 p = reports.get(cp["slot"])
                 checkpoints.append({
-                    "slot": cp["slot"], "due_at": cp["due_dt"].strftime("%H:%M"),
+                    "slot": cp["slot"], "due_at": cp["due_dt"].strftime("%H:%M"), "date": cp["date"],
                     "uploaded": bool(p), "overdue": (not p) and now > cp["due_dt"],
                     "report": report_out(c, p, user) if p else None,
                 })
             extra = [p for p in sorted(reports.values(), key=lambda x: x["created_at"]) if p["slot"].startswith("extra_")]
             result.append({"shift_id": s["id"], "user_id": s["user_id"], "user_name": s["user_name"],
-                           "start": s["start"], "end": s["end"], "checkpoints": checkpoints,
-                           "extra_reports": [report_out(c, p, user) for p in extra]})
+                           "date": s["date"], "start": s["start"], "end": s["end"], "state": state,
+                           "checkpoints": checkpoints,
+                           "extra_reports": [report_out(c, p, user) for p in extra], "_start": start_dt})
+    order = {"current": 0, "upcoming": 1, "finished": 2}
+    result.sort(key=lambda x: (x["user_id"] != user["id"], order[x["state"]], x["_start"]))   # свои и текущие — сверху
+    for x in result:
+        x.pop("_start")
     return result
+
+
+RECENT_SHIFT_HOURS = 6      # закончившуюся смену показываем ещё 6 часов — успеть дослать отчёт
+
+
+def shift_bounds(s: dict):
+    d = parse_day(s["date"])
+    h1, m1 = map(int, s["start"].split(":"))
+    h2, m2 = map(int, s["end"].split(":"))
+    start = datetime(d.year, d.month, d.day, h1, m1, tzinfo=MSK)
+    end = datetime(d.year, d.month, d.day, h2, m2, tzinfo=MSK)
+    if end <= start:
+        end += timedelta(days=1)                      # ночная смена заканчивается на следующий день
+    return start, end
 
 
 @app.get("/api/shifts/photos/mine")
