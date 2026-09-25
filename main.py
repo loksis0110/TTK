@@ -267,6 +267,9 @@ CHECKLIST_NOTES = {"day": "", "night": "Итоговая заявка на за�
 # ======================= БАЗА ДАННЫХ =======================
 @contextmanager
 def db():
+    db_dir = os.path.dirname(os.path.abspath(DB_PATH))
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -632,6 +635,18 @@ async def add_order(item: OrderItem, user: dict = Depends(current_user)):
 async def delete_order(order_id: int, user: dict = Depends(current_user)):
     with db() as c:
         c.execute("DELETE FROM active_order WHERE id=?", (order_id,))
+    return {"status": "success"}
+
+
+@app.post("/api/orders/send_now")
+async def send_order_now(admin: dict = Depends(require_admin)):
+    """Принудительная отправка текущей заявки в Telegram-группу, не дожидаясь 07:00."""
+    if not bot:
+        raise HTTPException(400, "BOT_TOKEN не настроен на сервере — отправка недоступна")
+    ok = await send_order_to_tg()
+    if not ok:
+        raise HTTPException(400, "Список закупки пуст — отправлять нечего")
+    logger.info(f"Заявка отправлена вручную пользователем {admin['name']}")
     return {"status": "success"}
 
 
@@ -1160,6 +1175,22 @@ async def purge_note(nid: int, user: dict = Depends(current_user)):
 @app.get("/")
 async def serve_frontend():
     return FileResponse("index.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/sw.js")
+async def serve_sw():
+    if not os.path.exists("sw.js"):
+        raise HTTPException(status_code=404, detail="sw.js не найден")
+    return FileResponse("sw.js", media_type="application/javascript",
+                         headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
+@app.get("/manifest.json")
+async def serve_manifest():
+    if not os.path.exists("manifest.json"):
+        raise HTTPException(status_code=404, detail="manifest.json не найден")
+    return FileResponse("manifest.json", media_type="application/manifest+json",
+                         headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/logo.png")

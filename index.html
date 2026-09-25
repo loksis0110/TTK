@@ -5,7 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Тугай ТТК">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0071e3">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/logo.png">
 <title>Тугай ТТК</title>
+<script>
+// Применяем сохранённую тему до отрисовки CSS, чтобы не было "мигания" не той темой.
+(function(){try{var t=localStorage.getItem('tugai_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t)}catch(e){}})();
+</script>
 <style>
 :root{
   --bg:#f5f5f7; --surface:#fff; --text:#1d1d1f; --sec:#6e6e73; --line:rgba(0,0,0,.09);
@@ -13,11 +22,17 @@
   --fill:rgba(0,0,0,.045); --nav:rgba(255,255,255,.78); --shadow:0 1px 2px rgba(0,0,0,.04),0 6px 20px rgba(0,0,0,.05);
   --ease:cubic-bezier(.16,1,.3,1);
 }
-@media (prefers-color-scheme:dark){:root{
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#000; --surface:#1d1d1f; --text:#f5f5f7; --sec:#a1a1a6; --line:rgba(255,255,255,.13);
   --blue:#2997ff; --green:#30d158; --red:#ff453a; --orange:#ff9f0a;
   --fill:rgba(255,255,255,.08); --nav:rgba(22,22,23,.78); --shadow:0 0 0 1px rgba(255,255,255,.06);
 }.logo{filter:invert(1)}}
+:root[data-theme="dark"]{
+  --bg:#000; --surface:#1d1d1f; --text:#f5f5f7; --sec:#a1a1a6; --line:rgba(255,255,255,.13);
+  --blue:#2997ff; --green:#30d158; --red:#ff453a; --orange:#ff9f0a;
+  --fill:rgba(255,255,255,.08); --nav:rgba(22,22,23,.78); --shadow:0 0 0 1px rgba(255,255,255,.06);
+}
+:root[data-theme="dark"] .logo{filter:invert(1)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue","Segoe UI",Roboto,Arial,sans-serif;font-size:17px;line-height:1.47;letter-spacing:-.022em;-webkit-font-smoothing:antialiased;padding-bottom:calc(60px + env(safe-area-inset-bottom))}
@@ -38,6 +53,11 @@ button,input,select,textarea{font:inherit;letter-spacing:inherit;color:inherit}
 .tab.active{background:var(--fill);color:var(--text);font-weight:600}
 .badge{background:var(--red);color:#fff;font-size:11px;font-weight:600;border-radius:980px;padding:0 6px;margin-left:5px;line-height:16px;display:inline-block}
 .user-chip{background:none;border:0;font-size:14px;color:var(--blue);cursor:pointer;padding:6px 4px;white-space:nowrap}
+.icon-btn{background:none;border:0;width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:var(--text);transition:background .15s;flex:none}
+@media (hover:hover){.icon-btn:hover{background:var(--fill)}}
+.net-status{font-size:12px;font-weight:600;padding:5px 11px;border-radius:980px;background:var(--fill);color:var(--sec);cursor:pointer;white-space:nowrap;transition:.2s}
+.net-status.off{background:rgba(255,69,58,.15);color:var(--red)}
+.net-status.pending{background:rgba(255,159,10,.18);color:var(--orange)}
 @media(max-width:720px){.tabs{order:3;flex:0 0 100%;justify-content:flex-start;padding-bottom:8px}.user-chip{margin-left:auto}}
 
 /* LAYOUT */
@@ -172,21 +192,35 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
 .cl-sub.done .tx{color:var(--sec);text-decoration:line-through}
 .cl-sub .tx{flex:1}
 
-/* NOTES */
-.sheet.wide{max-width:680px}
-.ntoolbar{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:12px;margin-bottom:8px;border-bottom:1px solid var(--line)}
+/* NOTES — iOS Notes style */
+.sheet.wide{max-width:680px;padding:0;display:flex;flex-direction:column;max-height:min(760px,92vh)}
+@media(max-width:720px){
+  .sheet.wide{position:fixed;inset:0;max-width:100%;width:100%;height:100%;max-height:100%;border-radius:0;margin:0}
+}
+.note-top{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:14px 16px;padding-top:calc(14px + env(safe-area-inset-top));border-bottom:1px solid var(--line)}
+.note-top .side{display:flex;gap:6px;align-items:center}
+.note-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 20px 8px}
+.ntoolbar{display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;padding:8px 10px;padding-bottom:calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--nav);backdrop-filter:saturate(180%) blur(20px)}
 .ntoolbar::-webkit-scrollbar{display:none}
-.ntoolbar button{border:0;background:var(--fill);border-radius:8px;padding:6px 12px;font-size:14px;cursor:pointer;white-space:nowrap;color:var(--text)}
+.ntoolbar button{border:0;background:none;border-radius:10px;padding:9px 13px;font-size:15px;font-weight:600;cursor:pointer;white-space:nowrap;color:var(--btn);flex:none;transition:background .15s}
+.ntoolbar button:active{background:var(--fill)}
 .ntoolbar button.on{background:var(--btn);color:#fff}
-.nrow{display:flex;align-items:center;gap:8px;padding:5px 0}
-.nrow-in{border:0;background:none;outline:none;flex:1;font-size:17px;padding:4px 0;font-family:inherit;color:var(--text)}
-.nrow.t-h1 .nrow-in{font-size:24px;font-weight:700}
-.nrow.t-h2 .nrow-in{font-size:19px;font-weight:700}
+.nrow{display:flex;align-items:flex-start;gap:8px;padding:6px 0}
+.nrow-in{border:0;background:none;outline:none;flex:1;font-size:17px;padding:4px 0;font-family:inherit;color:var(--text);line-height:1.45}
+.nrow.t-h1 .nrow-in{font-size:26px;font-weight:700;padding-top:10px}
+.nrow.t-h2 .nrow-in{font-size:20px;font-weight:700;padding-top:6px}
 .nrow-in.done{color:var(--sec);text-decoration:line-through}
-.nrow-ck{width:20px;height:20px;border-radius:50%;border:2px solid var(--sec);flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;cursor:pointer}
-.nrow-ck.on{background:var(--btn);border-color:var(--btn)}
-.nrow-bullet{width:20px;flex:none;text-align:center;color:var(--sec)}
-.note-pin{color:var(--orange);margin-left:4px}
+.nrow-ck{width:22px;height:22px;margin-top:3px;border-radius:50%;border:2px solid var(--sec);flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;cursor:pointer;transition:.15s}
+.nrow-ck.on{background:var(--orange);border-color:var(--orange)}
+.nrow-bullet{width:20px;flex:none;text-align:center;color:var(--sec);padding-top:4px}
+.note-pin{color:var(--orange);margin-right:5px;font-size:13px}
+
+/* Notes list — flat rows like iOS Notes app */
+.note-row{display:flex;flex-direction:column;gap:2px;padding:11px 18px;cursor:pointer;transition:background .15s}
+.note-row .nt{font-size:17px;font-weight:590;color:var(--text);display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note-row .nm{font-size:15px;color:var(--sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (hover:hover){.note-row:hover{background:var(--fill)}}
+.notes-sec{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--sec);margin:26px 4px 6px;text-transform:uppercase}
 .hist .d{font-size:15px}
 .hist .m{font-size:13px;color:var(--sec);margin-top:2px}
 .ic{display:inline-flex;width:22px;height:22px;border-radius:50%;align-items:center;justify-content:center;font-size:12px;color:#fff;margin-right:8px;background:var(--sec);vertical-align:1px}
@@ -250,6 +284,8 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
       <button class="tab hidden" data-t="team" id="tab-team">Команда<span class="badge hidden" id="pending-badge"></span></button>
     </nav>
     <button class="user-chip" id="user-chip" onclick="logout()"></button>
+    <span class="net-status hidden" id="net-status" onclick="flushOutbox()"></span>
+    <button class="icon-btn" id="theme-toggle" onclick="cycleTheme()" title="Сменить тему"></button>
   </div></header>
 
   <main class="wrap">
@@ -310,7 +346,10 @@ label.lb{display:block;font-size:13px;color:var(--sec);margin:14px 0 6px}
     <!-- ЗАЯВКИ -->
     <section class="view" id="view-orders">
       <div class="hero"><span class="eyebrow">ЗАКУПКА</span><h1>Заявки</h1><p>Список закупки на завтра.</p></div>
-      <div class="info">Заявка автоматически отправляется закупщику в Telegram каждый день в 07:00 (МСК). Если список пуст — ничего не отправляется.</div>
+      <div class="info" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <span>Заявка автоматически отправляется закупщику в Telegram каждый день в 07:00 (МСК). Если список пуст — ничего не отправляется.</span>
+        <span class="admin-only"><button class="btn primary sm" style="white-space:nowrap" onclick="sendOrderNow()">📤 Отправить сейчас</button></span>
+      </div>
       <div class="panel">
         <h3>Добавить позицию</h3>
         <div class="two" style="grid-template-columns:2fr 1fr;margin-top:12px">
@@ -386,7 +425,7 @@ const MONTHS_NOM=['Январь','Февраль','Март','Апрель','М�
 const DAYS=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 
 let token=localStorage.getItem('tugai_token'),me=null,menu=[],staffList=[],users=[];
-let tab='drinks',filter='all',schView='month',weekStart=monday(new Date()),schMonth=new Date(),shifts=[],swapFrom=null,ordersTimer=null;
+let tab='drinks',filter='all',schView='month',weekStart=monday(new Date()),schMonth=new Date(),shifts=[],swapFrom=null,ordersTimer=null,pendingOrders=[];
 const fromIso=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
 
 const $=id=>document.getElementById(id);
@@ -399,8 +438,71 @@ const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
 function monday(d){const x=new Date(d);x.setDate(x.getDate()-((x.getDay()+6)%7));x.setHours(0,0,0,0);return x}
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2600)}
 
+/* ---------- ТЕМА ---------- */
+function applyTheme(t){
+  if(t==='auto')document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme',t);
+  const b=$('theme-toggle');if(b)b.textContent=t==='light'?'☀️':t==='dark'?'🌙':'🌗';
+}
+function cycleTheme(){
+  const cur=localStorage.getItem('tugai_theme')||'auto';
+  const next=cur==='auto'?'light':cur==='light'?'dark':'auto';
+  localStorage.setItem('tugai_theme',next);applyTheme(next);
+  toast(next==='auto'?'Тема: как в системе':next==='light'?'Тема: светлая':'Тема: тёмная');
+}
+applyTheme(localStorage.getItem('tugai_theme')||'auto');
+
+/* ---------- ОФЛАЙН: очередь несинхронизированных действий ---------- */
+const OUTBOX_KEY='tugai_outbox';
+function getOutbox(){try{return JSON.parse(localStorage.getItem(OUTBOX_KEY)||'[]')}catch(e){return[]}}
+function setOutbox(q){localStorage.setItem(OUTBOX_KEY,JSON.stringify(q));updateNetStatus()}
+function queueRequest(path,method,body){
+  const q=getOutbox();
+  q.push({id:Date.now()+'_'+Math.random().toString(36).slice(2),path,method,body});
+  setOutbox(q);
+}
+function updateNetStatus(){
+  const el=$('net-status');if(!el)return;
+  const n=getOutbox().length;
+  if(!navigator.onLine){el.textContent='📴 Офлайн'+(n?` · ${n} в очереди`:'');el.className='net-status off';el.classList.remove('hidden')}
+  else if(n){el.textContent=`🔄 Отправка (${n})…`;el.className='net-status pending';el.classList.remove('hidden')}
+  else{el.classList.add('hidden')}
+}
+async function flushOutbox(){
+  if(!navigator.onLine)return;
+  const q=getOutbox();if(!q.length)return;
+  const remaining=[];
+  for(const item of q){
+    try{await api(item.path,{method:item.method,body:item.body})}
+    catch(e){remaining.push(item)}
+  }
+  setOutbox(remaining);
+  if(remaining.length<q.length){pendingOrders=[];toast('Синхронизировано ✅');reloadTab()}
+}
+function reloadTab(){
+  if(tab==='orders')fetchOrders();
+  else if(tab==='checklist')loadChecklist();
+  else if(tab==='notes')loadNotes();
+  else if(tab==='schedule')({month:loadMonth,week:loadWeek,history:loadHistory})[schView]();
+  else if(tab==='team')loadTeam();
+}
+window.addEventListener('online',()=>{updateNetStatus();flushOutbox()});
+window.addEventListener('offline',updateNetStatus);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)flushOutbox()});
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}))}
+
 async function api(path,{method='GET',body}={}){
-  const r=await fetch(path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body!==undefined?JSON.stringify(body):undefined});
+  if(method!=='GET'&&!navigator.onLine){
+    queueRequest(path,method,body);
+    return {queued:true};
+  }
+  let r;
+  try{
+    r=await fetch(path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body!==undefined?JSON.stringify(body):undefined});
+  }catch(networkErr){
+    if(method!=='GET'){queueRequest(path,method,body);return{queued:true}}
+    throw new Error('Нет соединения с сервером');
+  }
   let data=null;try{data=await r.json()}catch(e){}
   if(r.status===401&&token&&path!=='/api/login'){localLogout();throw new Error('Сессия истекла')}
   if(!r.ok)throw new Error(typeof data?.detail==='string'?data.detail:'Проверьте введённые данные');
@@ -438,6 +540,7 @@ function localLogout(){token=null;me=null;localStorage.removeItem('tugai_token')
 async function logout(){if(!confirm(`Выйти из аккаунта ${me.name}?`))return;try{await api('/api/logout',{method:'POST'})}catch(e){}localLogout()}
 
 async function boot(){
+  updateNetStatus();
   if(token){try{me=await api('/api/me');enter();return}catch(e){}}
   $('auth').classList.remove('hidden');
 }
@@ -446,6 +549,7 @@ async function enter(){
   $('user-chip').textContent=`${me.name} · ${ROLES[me.role]||''}`;
   $('tab-team').classList.toggle('hidden',!isAdmin());
   document.querySelectorAll('.edit-only').forEach(e=>e.classList.toggle('hidden',!canEdit()));
+  document.querySelectorAll('.admin-only').forEach(e=>e.classList.toggle('hidden',!isAdmin()));
   await run(async()=>{menu=await api('/api/menu')});
   if(isAdmin())refreshPending();
   go('drinks');
@@ -647,14 +751,26 @@ function gotoWeekFrom(k){
 /* ---------- ЗАЯВКИ ---------- */
 async function fetchOrders(){
   const r=await run(()=>api('/api/get_orders'));if(!r)return;
-  $('orders').innerHTML=r.length?r.map(o=>`<div class="row"><div><div class="t">${esc(o.item_name)} <span style="color:var(--green)">— ${esc(o.quantity)}</span></div><div class="s">${o.comment?esc(o.comment)+' · ':''}${esc(o.author_name)}</div></div><button class="btn sm danger" onclick="removeOrder(${o.id})">Удалить</button></div>`).join(''):'<div class="row muted">Список пуст</div>';
+  const merged=[...pendingOrders.map((o,i)=>({...o,id:'pending-'+i})),...r];
+  $('orders').innerHTML=merged.length?merged.map(o=>`<div class="row"><div><div class="t">${o._pending?'⏳ ':''}${esc(o.item_name)} <span style="color:var(--green)">— ${esc(o.quantity)}</span></div><div class="s">${o.comment?esc(o.comment)+' · ':''}${esc(o.author_name)}${o._pending?' · ждёт отправки':''}</div></div>${o._pending?'':`<button class="btn sm danger" onclick="removeOrder(${o.id})">Удалить</button>`}</div>`).join(''):'<div class="row muted">Список пуст</div>';
 }
 async function submitOrder(){
-  const body={item_name:$('o-name').value,quantity:$('o-qty').value,comment:$('o-comment').value};
+  const name=$('o-name').value.trim(),qty=$('o-qty').value.trim();
+  if(!name||!qty)return toast('Укажите позицию и количество');
+  const body={item_name:name,quantity:qty,comment:$('o-comment').value.trim()};
   const r=await run(()=>api('/api/add_order',{method:'POST',body}));
-  if(r){$('o-name').value='';$('o-qty').value='';$('o-comment').value='';fetchOrders()}
+  if(r){
+    $('o-name').value='';$('o-qty').value='';$('o-comment').value='';
+    if(r.queued){pendingOrders.push({...body,author_name:me.name,_pending:true});toast('Офлайн: сохранено, отправим при подключении')}
+    fetchOrders();
+  }
 }
 async function removeOrder(id){await run(()=>api(`/api/delete_order/${id}`,{method:'DELETE'}));fetchOrders()}
+async function sendOrderNow(){
+  if(!confirm('Отправить текущий список закупки в Telegram-группу прямо сейчас, не дожидаясь 07:00?'))return;
+  const r=await run(()=>api('/api/orders/send_now',{method:'POST'}));
+  if(r){toast('Заявка отправлена в группу ✅');fetchOrders()}
+}
 
 /* ---------- ЧЕК-ЛИСТ ---------- */
 let clShift=localStorage.getItem('tugai_cl_shift')||'day';
@@ -688,7 +804,14 @@ function renderChecklist(){
 function clOpenToggle(id){clOpen.has(id)?clOpen.delete(id):clOpen.add(id);renderChecklist()}
 async function clToggle(id,sub,checked){
   const r=await run(()=>api('/api/checklist/toggle',{method:'POST',body:{shift:clShift,item_id:id,sub,checked}}));
-  if(r){const i=clItems.findIndex(x=>x.id===id);if(i>-1)clItems[i]=r;renderChecklist()}
+  if(!r)return;
+  const i=clItems.findIndex(x=>x.id===id);if(i<0)return;
+  if(r.queued){
+    if(sub===-1)clItems[i].done=checked;else clItems[i].subs[sub]=checked;
+  }else{
+    clItems[i]=r;
+  }
+  renderChecklist();
 }
 function clAddItem(){clOpenSheet(null)}
 function clEditItem(id){clOpenSheet(clItems.find(x=>x.id===id))}
@@ -729,6 +852,15 @@ async function loadNotes(){
   const r=await run(()=>api('/api/notes'));if(!r)return;
   notesList=r;renderNotes();
 }
+function fmtNoteDate(ts){
+  if(!ts)return '';
+  const d=new Date(ts*1000),now=new Date();
+  const y=new Date(now);y.setDate(y.getDate()-1);
+  if(d.toDateString()===now.toDateString())return d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  if(d.toDateString()===y.toDateString())return 'Вчера';
+  if(d.getFullYear()===now.getFullYear())return d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'});
+  return d.toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'});
+}
 function renderNotes(){
   const q=$('note-search').value.trim().toLowerCase();
   $('note-trash-btn').textContent=notesFilter==='trash'?'← Все заметки':'Корзина';
@@ -737,9 +869,9 @@ function renderNotes(){
   if(notesFilter!=='trash'){
     const pinned=list.filter(n=>n.pinned),rest=list.filter(n=>!n.pinned);
     $('notes-list').innerHTML=
-      (pinned.length?`<h2 class="h2" style="font-size:14px;letter-spacing:.02em;color:var(--sec);margin:22px 0 4px">ЗАКРЕПЛЁННЫЕ</h2><div class="group">${pinned.map(noteRowHtmlList).join('')}</div>`:'')+
-      (pinned.length?`<h2 class="h2" style="font-size:14px;letter-spacing:.02em;color:var(--sec);margin:22px 0 4px">ОСТАЛЬНЫЕ</h2>`:'')+
-      `<div class="group">${rest.length?rest.map(noteRowHtmlList).join(''):(pinned.length?'':'<div class="row muted">Заметок нет — нажмите «+ Заметка»</div>')}</div>`;
+      (pinned.length?`<div class="notes-sec">Закреплённые</div><div class="group">${pinned.map(noteRowHtmlList).join('')}</div>`:'')+
+      (pinned.length&&rest.length?`<div class="notes-sec">Остальные</div>`:'')+
+      (rest.length?`<div class="group">${rest.map(noteRowHtmlList).join('')}</div>`:(pinned.length?'':'<div class="empty">Заметок пока нет<br><span style="font-size:14px">Нажмите «+ Заметка», чтобы создать первую</span></div>'));
   }else{
     $('notes-list').innerHTML=`<div class="group">${list.length?list.map(n=>`
       <div class="row"><div style="flex:1;cursor:pointer" onclick="openNoteById(${n.id})"><div class="t">${esc(n.title||'Без названия')}</div><div class="s">${esc(n.preview)}</div></div>
@@ -748,8 +880,10 @@ function renderNotes(){
   }
 }
 function noteRowHtmlList(n){
-  return `<div class="row" style="cursor:pointer" onclick="openNoteById(${n.id})">
-    <div style="flex:1"><div class="t">${n.has_check?'☑ ':''}${esc(n.title||'Новая заметка')}${n.pinned?'<span class="note-pin">📌</span>':''}</div><div class="s">${esc(n.preview)}</div></div>
+  const meta=[fmtNoteDate(n.updated_at),n.preview?esc(n.preview):(n.has_check?'Список':'Без текста')].filter(Boolean).join('  ·  ');
+  return `<div class="note-row" onclick="openNoteById(${n.id})">
+    <div class="nt">${n.pinned?'<span class="note-pin">📌</span>':''}${n.has_check?'☑ ':''}${esc(n.title||'Новая заметка')}</div>
+    <div class="nm">${meta}</div>
   </div>`;
 }
 function newNote(){openNoteSheet(null)}
@@ -760,25 +894,26 @@ function openNoteSheet(n){
   noteFocused=null;
   $('sheet').classList.add('wide');
   $('sheet').innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px">
-      <button class="btn sm" onclick="closeNoteSheet()">Готово</button>
-      <div style="display:flex;gap:6px">
-        <button class="btn sm" onclick="pinCurrentNote(${n&&n.pinned?'false':'true'})">${n&&n.pinned?'📌 Открепить':'📌 Закрепить'}</button>
-        <button class="btn sm danger" onclick="deleteCurrentNote()">Удалить</button>
+    <div class="note-top">
+      <button class="btn sm" onclick="closeNoteSheet()">‹ Готово</button>
+      <div class="side">
+        <button class="btn sm" onclick="pinCurrentNote(${n&&n.pinned?'false':'true'})" title="${n&&n.pinned?'Открепить':'Закрепить'}">${n&&n.pinned?'📌':'📍'}</button>
+        <button class="btn sm danger" onclick="deleteCurrentNote()" title="Удалить">🗑</button>
       </div>
     </div>
+    <div class="note-body" id="note-rows"></div>
     <div class="ntoolbar">
-      <button onclick="noteSetType('h1')">H1</button>
-      <button onclick="noteSetType('h2')">H2</button>
-      <button onclick="noteSetType('check')">☑ Чек-бокс</button>
-      <button onclick="noteSetType('bullet')">• Список</button>
-      <button onclick="noteSetType('dash')">– Тире</button>
-      <button onclick="noteSetType('num')">1. Нумер.</button>
-      <button onclick="noteSetType('text')">Текст</button>
-    </div>
-    <div id="note-rows"></div>`;
+      <button onclick="noteSetType('text')" title="Обычный текст">Aa</button>
+      <button onclick="noteSetType('h1')" title="Заголовок">H1</button>
+      <button onclick="noteSetType('h2')" title="Подзаголовок">H2</button>
+      <button onclick="noteSetType('check')" title="Чек-бокс">☑︎</button>
+      <button onclick="noteSetType('bullet')" title="Маркированный список">•</button>
+      <button onclick="noteSetType('dash')" title="Список с тире">–</button>
+      <button onclick="noteSetType('num')" title="Нумерованный список">1.</button>
+    </div>`;
   noteRenderRows();
   $('ov').classList.add('on');
+  setTimeout(()=>noteFocusRow(Math.max(0,noteRows.length-1),true),50);
 }
 function noteNumFor(idx){
   let n=1;
